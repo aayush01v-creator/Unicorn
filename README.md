@@ -1,2 +1,1 @@
-# Unicorn
-Unified Technology.
+# SNN3D
