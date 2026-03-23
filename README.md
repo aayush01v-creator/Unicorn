@@ -9,7 +9,7 @@ Right now, the repo is a working prototype with a minimal backend, a simple forc
 ## Current Features
 
 - JSON-based network loading
-- simple spiking neural simulation
+- leaky integrate-and-fire simulation with membrane decay, refractory periods, and configurable timesteps
 - 3D force-directed layout
 - interactive 3D HTML preview
 - sample network and generated layout output
@@ -43,7 +43,7 @@ What It Does
 
 1. Simulation
 
-main.py loads a sample network and runs a very small spiking simulation.
+main.py loads a sample network and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
 
 2. Layout
 
@@ -57,3 +57,20 @@ synapses act like springs
 3. Preview
 
 render_preview.py generates an interactive 3D HTML visualization that can be opened in a browser.
+
+
+## Simulation Configuration
+
+Each neuron can override a few lightweight LIF parameters in `samples/network.json` or any other network config:
+
+- `threshold`: firing threshold for that neuron
+- `membrane_time_constant`: controls how quickly the membrane voltage decays back toward rest
+- `refractory_period`: amount of simulated time the neuron stays reset after a spike
+- `reset_potential`: optional post-spike reset voltage
+- `initial_voltage`: optional starting membrane voltage
+
+Global simulation settings include:
+
+- `dt`: simulation timestep used for integration and refractory countdowns
+- `steps`: number of simulation steps to run
+- `input_current`: constant external drive per neuron
