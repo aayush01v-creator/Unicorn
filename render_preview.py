@@ -1,13 +1,18 @@
 import json
 from pathlib import Path
 
-import plotly.graph_objects as go
-
-
 EXCITATORY_COLOR = "#2ecc71"
 INHIBITORY_COLOR = "#e74c3c"
 ARROW_COLOR = "#f5f5f5"
 WEIGHT_COLORSCALE = "RdBu"
+NODE_COLORSCALE = "Viridis"
+CAMERA_EYE = dict(x=1.55, y=1.55, z=1.15)
+
+
+def go_module():
+    import plotly.graph_objects as go
+
+    return go
 
 
 def load_json(path: str):
@@ -19,6 +24,34 @@ def synapse_style(weight: float):
     kind = "excitatory" if weight >= 0 else "inhibitory"
     color = EXCITATORY_COLOR if weight >= 0 else INHIBITORY_COLOR
     return kind, color
+
+
+def compute_node_metrics(network):
+    metrics = {}
+    for neuron in network["neurons"]:
+        metrics[neuron["id"]] = {"in_degree": 0, "out_degree": 0, "weight_load": 0.0}
+
+    for synapse in network.get("synapses", []):
+        source = metrics[synapse["from"]]
+        target = metrics[synapse["to"]]
+        weight = synapse.get("weight", 0.0)
+        source["out_degree"] += 1
+        target["in_degree"] += 1
+        source["weight_load"] += abs(weight)
+        target["weight_load"] += abs(weight)
+
+    return metrics
+
+
+def network_summary(network):
+    excitatory = sum(1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) >= 0)
+    inhibitory = sum(1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) < 0)
+    return {
+        "neurons": len(network.get("neurons", [])),
+        "synapses": len(network.get("synapses", [])),
+        "excitatory": excitatory,
+        "inhibitory": inhibitory,
+    }
 
 
 def build_edge_geometry(network, pos):
@@ -41,6 +74,7 @@ def build_edge_geometry(network, pos):
             "arrow_w": [],
             "arrow_colors": [],
             "line_widths": [],
+            "max_abs_weight": 1.0,
         }
 
     max_abs_weight = max(abs(syn.get("weight", 0.0)) for syn in network["synapses"]) or 1.0
@@ -106,14 +140,38 @@ def build_edge_geometry(network, pos):
 
 
 def build_figure(network, pos):
-    xs, ys, zs, labels = [], [], [], []
+    go = go_module()
+    xs, ys, zs = [], [], []
+    node_sizes, node_colors, node_hover, labels = [], [], [], []
+    metrics = compute_node_metrics(network)
+    summary = network_summary(network)
+
     for neuron in network["neurons"]:
         nid = neuron["id"]
         x, y, z = pos[nid]
+        node_metric = metrics[nid]
+        total_degree = node_metric["in_degree"] + node_metric["out_degree"]
+
         xs.append(x)
         ys.append(y)
         zs.append(z)
         labels.append(f"Neuron {nid}")
+        node_sizes.append(10 + (4 * total_degree))
+        node_colors.append(neuron.get("input_current", network.get("input_current", [0.0] * len(network["neurons"]))[nid] if nid < len(network.get("input_current", [])) else 0.0))
+        node_hover.append(
+            "<br>".join(
+                [
+                    f"Neuron {nid}",
+                    f"threshold={neuron.get('threshold', 1.0):.2f}",
+                    f"tau={neuron.get('membrane_time_constant', 'default')}",
+                    f"refractory={neuron.get('refractory_period', network.get('refractory_period', 'default'))}",
+                    f"input_current={node_colors[-1]:.2f}",
+                    f"in_degree={node_metric['in_degree']}",
+                    f"out_degree={node_metric['out_degree']}",
+                    f"weight_load={node_metric['weight_load']:.2f}",
+                ]
+            )
+        )
 
     geometry = build_edge_geometry(network, pos)
     avg_line_width = sum(geometry["line_widths"]) / len(geometry["line_widths"]) if geometry["line_widths"] else 4
@@ -123,7 +181,14 @@ def build_figure(network, pos):
         y=geometry["edge_y"],
         z=geometry["edge_z"],
         mode="lines",
-        line=dict(width=avg_line_width, color=geometry["edge_colors"], colorscale=WEIGHT_COLORSCALE, cmin=-geometry["max_abs_weight"], cmax=geometry["max_abs_weight"], colorbar=dict(title="Weight", len=0.7)),
+        line=dict(
+            width=avg_line_width,
+            color=geometry["edge_colors"],
+            colorscale=WEIGHT_COLORSCALE,
+            cmin=-geometry["max_abs_weight"],
+            cmax=geometry["max_abs_weight"],
+            colorbar=dict(title="Weight", len=0.7),
+        ),
         hoverinfo="none",
         name="Synapses",
     )
@@ -135,7 +200,14 @@ def build_figure(network, pos):
         mode="markers+text",
         text=[f"{weight:+.2f}" for weight in geometry["weights"]],
         textposition="top center",
-        marker=dict(size=4, color=geometry["weights"], colorscale=WEIGHT_COLORSCALE, cmin=-geometry["max_abs_weight"], cmax=geometry["max_abs_weight"], opacity=0.95),
+        marker=dict(
+            size=4,
+            color=geometry["weights"],
+            colorscale=WEIGHT_COLORSCALE,
+            cmin=-geometry["max_abs_weight"],
+            cmax=geometry["max_abs_weight"],
+            opacity=0.95,
+        ),
         hovertemplate="%{customdata}<extra></extra>",
         customdata=geometry["weight_text"],
         name="Weights",
@@ -164,8 +236,16 @@ def build_figure(network, pos):
         mode="markers+text",
         text=labels,
         textposition="top center",
-        marker=dict(size=10, color=list(range(len(xs))), colorscale="Viridis"),
-        hovertemplate="%{text}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
+        marker=dict(
+            size=node_sizes,
+            color=node_colors,
+            colorscale=NODE_COLORSCALE,
+            colorbar=dict(title="Input current", x=1.05, len=0.45),
+            line=dict(width=1, color="#ffffff"),
+            opacity=0.96,
+        ),
+        hovertemplate="%{customdata}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
+        customdata=node_hover,
         name="Neurons",
     )
 
@@ -177,20 +257,38 @@ def build_figure(network, pos):
             yaxis_title="Y",
             zaxis_title="Z",
             aspectmode="data",
+            camera=dict(eye=CAMERA_EYE),
             annotations=[
                 dict(
                     showarrow=False,
                     x=0,
                     y=0,
                     z=0,
-                    text="Green = excitatory, red = inhibitory, cones show direction",
+                    text="Green = excitatory, red = inhibitory, node size tracks degree, node color tracks input current.",
                     xshift=10,
                     font=dict(size=12),
                 )
             ],
         ),
         legend=dict(x=0.01, y=0.99),
-        margin=dict(l=0, r=0, b=0, t=50),
+        margin=dict(l=0, r=0, b=0, t=70),
+        template="plotly_dark",
+        paper_bgcolor="#111111",
+        annotations=[
+            dict(
+                x=0.01,
+                y=1.08,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                align="left",
+                text=(
+                    f"Neurons: {summary['neurons']} | Synapses: {summary['synapses']} | "
+                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}"
+                ),
+                font=dict(size=13),
+            )
+        ],
     )
     return fig
 
