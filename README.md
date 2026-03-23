@@ -4,14 +4,17 @@ Unicorn is an early-stage cross-platform neural network visualization project fo
 - generate automatic 3D layouts using force-directed placement
 - preview the network in an interactive 3D browser view
 
-Right now, the repo is a working prototype with a minimal backend, a simple force-layout engine, and a Plotly-based 3D preview.
+Right now, the repo is a working prototype with a minimal backend, a simple force-layout engine, and Plotly-based 3D previews for both static inspection and spike animation.
 
 ## Current Features
 
 - JSON-based network loading
 - leaky integrate-and-fire simulation with membrane decay, refractory periods, and configurable timesteps
-- 3D force-directed layout
-- interactive 3D HTML preview
+- 3D force-directed layout generation
+- interactive 3D HTML preview with synapse direction arrows
+- synapse weight labels plus color intensity mapped to edge strength
+- excitatory vs inhibitory synapse coloring for easier circuit inspection
+- animated spike playback in the browser
 - sample network and generated layout output
 - Termux-friendly development workflow
 
@@ -29,35 +32,41 @@ Unicorn/
 │       └── simple_layout.py
 ├── samples/
 │   ├── network.json
-│   └── layout_output.json
+│   ├── layout_output.json
+│   └── spike_history.json
 ├── viewer/
-│   └── network_preview.html
+│   ├── network_preview.html
+│   └── spike_animation.html
 ├── layout_demo.py
 ├── main.py
 ├── render_preview.py
-├── requirements.txt
+├── animate_preview.py
 └── README.md
 ```
 
-What It Does
+## What It Does
 
-1. Simulation
+1. **Simulation**
 
-main.py loads a sample network and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
+   `main.py` loads a sample network and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
 
-2. Layout
+2. **Layout**
 
-layout_demo.py computes 3D neuron positions using a simple force-directed layout:
+   `layout_demo.py` computes 3D neuron positions using a simple force-directed layout where neurons repel each other and synapses act like springs.
 
-neurons repel each other
+3. **Preview**
 
-synapses act like springs
+   `render_preview.py` generates a static interactive 3D HTML visualization, while `animate_preview.py` generates a time-based spike playback view.
 
+## Reading the 3D Preview
 
-3. Preview
+The browser preview now exposes the main connectivity cues directly in 3D:
 
-render_preview.py generates an interactive 3D HTML visualization that can be opened in a browser.
-
+- **Arrow direction:** each synapse renders with a cone marker near the target neuron so you can see signal flow at a glance.
+- **Weight labels:** every synapse midpoint shows a signed numeric label such as `+0.70` or `-0.40`.
+- **Weight intensity:** stronger weights appear with more saturated edge coloring.
+- **Excitatory vs inhibitory colors:** positive weights render in the green side of the diverging scale, while negative weights render in the red side.
+- **Animated spikes:** neurons still pulse in the animation so you can correlate structure with activity over time.
 
 ## Simulation Configuration
 
@@ -74,3 +83,64 @@ Global simulation settings include:
 - `dt`: simulation timestep used for integration and refractory countdowns
 - `steps`: number of simulation steps to run
 - `input_current`: constant external drive per neuron
+
+## Tutorial: Generate and Inspect the Browser Preview
+
+### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Review or edit the sample network
+
+Open `samples/network.json` and define neurons plus synapses. Use positive weights for excitatory connections and negative weights for inhibitory ones. For example:
+
+```json
+{
+  "from": 2,
+  "to": 0,
+  "weight": -0.5
+}
+```
+
+That single negative weight is enough to make the preview render the edge in the inhibitory color range.
+
+### 3. Generate a layout
+
+```bash
+python layout_demo.py
+```
+
+This produces `samples/layout_output.json`, which stores the 3D coordinates used by the preview renderers.
+
+### 4. Build the static 3D preview
+
+```bash
+python render_preview.py
+```
+
+Open `viewer/network_preview.html` in a browser and inspect:
+
+- cones showing synapse direction
+- signed text labels at synapse midpoints
+- diverging edge colors indicating inhibitory vs excitatory strength
+
+### 5. Build the animated spike preview
+
+```bash
+python animate_preview.py
+```
+
+Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
+
+### 6. Iterate on readability
+
+A practical workflow is:
+
+1. edit `samples/network.json`
+2. rerun `python layout_demo.py`
+3. rerun `python render_preview.py` and/or `python animate_preview.py`
+4. refresh the browser tab
+
+If your preview looks too dense, reduce the number of edges temporarily or scale the network into smaller subcircuits before rendering.
