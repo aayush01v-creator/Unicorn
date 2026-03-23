@@ -1,15 +1,26 @@
 import json
 from pathlib import Path
 
-import plotly.graph_objects as go
-
 from backend.data_loader.json_loader import load_network
 from backend.neuron_sim.simple_snn import SimpleSNN
-from render_preview import build_edge_geometry
 
 
 SPIKE_COLOR = "#f1c40f"
 IDLE_COLOR = "#4c78a8"
+TRAIL_COLOR = "#f39c12"
+ACTIVE_PATH_COLOR = "#fff6b7"
+TRAIL_WINDOW = 3
+SPEEDS = {
+    "Slow": 1200,
+    "Normal": 700,
+    "Fast": 300,
+}
+
+
+def go_module():
+    import plotly.graph_objects as go
+
+    return go
 
 
 def load_json(path: str):
@@ -17,11 +28,12 @@ def load_json(path: str):
         return json.load(f)
 
 
-def build_node_trace(xs, ys, zs, labels, spikes):
+def build_node_trace(xs, ys, zs, labels, spikes, time_value):
+    go = go_module()
     colors = [SPIKE_COLOR if s == 1 else IDLE_COLOR for s in spikes]
     sizes = [15 if s == 1 else 9 for s in spikes]
     hover_text = [
-        f"{label}<br>spike={'yes' if spike else 'no'}"
+        f"{label}<br>time={time_value:.2f}<br>spike={'yes' if spike else 'no'}"
         for label, spike in zip(labels, spikes)
     ]
     return go.Scatter3d(
@@ -31,14 +43,116 @@ def build_node_trace(xs, ys, zs, labels, spikes):
         mode="markers+text",
         text=labels,
         textposition="top center",
-        marker=dict(size=sizes, color=colors),
+        marker=dict(size=sizes, color=colors, line=dict(width=1, color="#ffffff")),
         hovertemplate="%{customdata}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
         customdata=hover_text,
         name="Neurons",
     )
 
 
+def build_trail_trace(xs, ys, zs, labels, intensities, time_value):
+    go = go_module()
+    sizes = [10 + (18 * intensity) for intensity in intensities]
+    opacities = [round(0.15 + (0.55 * intensity), 3) if intensity > 0 else 0.0 for intensity in intensities]
+    hover_text = [
+        f"{label}<br>time={time_value:.2f}<br>recent-spike-intensity={intensity:.2f}"
+        for label, intensity in zip(labels, intensities)
+    ]
+    return go.Scatter3d(
+        x=xs,
+        y=ys,
+        z=zs,
+        mode="markers",
+        marker=dict(size=sizes, color=TRAIL_COLOR, opacity=opacities, symbol="circle-open"),
+        hovertemplate="%{customdata}<extra></extra>",
+        customdata=hover_text,
+        name="Recent spike trail",
+    )
+
+
+def build_active_path_trace(active_synapses, pos, current_spikes, time_value):
+    go = go_module()
+    edge_x, edge_y, edge_z = [], [], []
+    midpoint_x, midpoint_y, midpoint_z, text = [], [], [], []
+
+    for synapse in active_synapses:
+        start = pos[synapse["from"]]
+        end = pos[synapse["to"]]
+        edge_x += [start[0], end[0], None]
+        edge_y += [start[1], end[1], None]
+        edge_z += [start[2], end[2], None]
+
+        midpoint_x.append((start[0] + end[0]) / 2)
+        midpoint_y.append((start[1] + end[1]) / 2)
+        midpoint_z.append((start[2] + end[2]) / 2)
+        text.append(
+            f"Active path<br>{synapse['from']} → {synapse['to']}<br>weight={synapse.get('weight', 0.0):+.2f}<br>time={time_value:.2f}<br>source_spike={current_spikes[synapse['from']]}"
+        )
+
+    line_trace = go.Scatter3d(
+        x=edge_x,
+        y=edge_y,
+        z=edge_z,
+        mode="lines",
+        line=dict(width=11, color=ACTIVE_PATH_COLOR),
+        opacity=0.95,
+        hoverinfo="none",
+        name="Active path",
+    )
+    marker_trace = go.Scatter3d(
+        x=midpoint_x,
+        y=midpoint_y,
+        z=midpoint_z,
+        mode="markers+text",
+        text=["active" for _ in active_synapses],
+        textposition="bottom center",
+        marker=dict(size=6, color=ACTIVE_PATH_COLOR, opacity=0.95),
+        hovertemplate="%{customdata}<extra></extra>",
+        customdata=text,
+        name="Active path labels",
+    )
+    return line_trace, marker_trace
+
+
+def compute_trail_intensities(history, step_index):
+    intensities = [0.0] * len(history[step_index]["spikes"])
+    for offset in range(TRAIL_WINDOW):
+        lookup = step_index - offset
+        if lookup < 0:
+            break
+        weight = (TRAIL_WINDOW - offset) / TRAIL_WINDOW
+        for neuron_index, spike in enumerate(history[lookup]["spikes"]):
+            if spike:
+                intensities[neuron_index] = max(intensities[neuron_index], weight)
+    return intensities
+
+
+def build_frame_data(history, step_index, xs, ys, zs, labels, pos, network):
+    step_data = history[step_index]
+    active_synapses = [
+        synapse for synapse in network["synapses"] if step_data["spikes"][synapse["from"]]
+    ]
+    trail_intensities = compute_trail_intensities(history, step_index)
+    active_path_trace, active_path_marker_trace = build_active_path_trace(
+        active_synapses, pos, step_data["spikes"], step_data["time"]
+    )
+    node_trace = build_node_trace(
+        xs, ys, zs, labels, step_data["spikes"], step_data["time"]
+    )
+    trail_trace = build_trail_trace(
+        xs, ys, zs, labels, trail_intensities, step_data["time"]
+    )
+    return step_data, [active_path_trace, active_path_marker_trace, trail_trace, node_trace]
+
+
+def animation_args(duration):
+    return [None, {"frame": {"duration": duration, "redraw": True}, "fromcurrent": True}]
+
+
 def main():
+    go = go_module()
+    from render_preview import build_edge_geometry
+
     network = load_network("samples/network.json")
     layout = load_json("samples/layout_output.json")
 
@@ -63,7 +177,14 @@ def main():
         y=geometry["edge_y"],
         z=geometry["edge_z"],
         mode="lines",
-        line=dict(width=5, color=geometry["edge_colors"], colorscale="RdBu", cmin=-geometry["max_abs_weight"], cmax=geometry["max_abs_weight"], colorbar=dict(title="Weight", len=0.7)),
+        line=dict(
+            width=5,
+            color=geometry["edge_colors"],
+            colorscale="RdBu",
+            cmin=-geometry["max_abs_weight"],
+            cmax=geometry["max_abs_weight"],
+            colorbar=dict(title="Weight", len=0.7),
+        ),
         hoverinfo="none",
         name="Synapses",
     )
@@ -75,7 +196,14 @@ def main():
         mode="markers+text",
         text=[f"{weight:+.2f}" for weight in geometry["weights"]],
         textposition="top center",
-        marker=dict(size=4, color=geometry["weights"], colorscale="RdBu", cmin=-geometry["max_abs_weight"], cmax=geometry["max_abs_weight"], opacity=0.95),
+        marker=dict(
+            size=4,
+            color=geometry["weights"],
+            colorscale="RdBu",
+            cmin=-geometry["max_abs_weight"],
+            cmax=geometry["max_abs_weight"],
+            opacity=0.95,
+        ),
         hovertemplate="%{customdata}<extra></extra>",
         customdata=geometry["weight_text"],
         name="Weights",
@@ -97,21 +225,31 @@ def main():
         name="Direction",
     )
 
-    node_trace = build_node_trace(xs, ys, zs, labels, history[0]["spikes"])
+    initial_step, initial_dynamic_traces = build_frame_data(
+        history, 0, xs, ys, zs, labels, pos, network
+    )
 
     frames = []
-    for step_data in history:
+    for step_index, _step_data in enumerate(history):
+        step_data, dynamic_traces = build_frame_data(
+            history, step_index, xs, ys, zs, labels, pos, network
+        )
         frames.append(
             go.Frame(
-                data=[edge_trace, weight_trace, arrow_trace, build_node_trace(xs, ys, zs, labels, step_data["spikes"])],
+                data=[edge_trace, weight_trace, arrow_trace, *dynamic_traces],
                 name=str(step_data["step"]),
+                layout=go.Layout(
+                    title=f"Unicorn 3D Spike Animation — step {step_data['step']} ({step_data['time']:.2f}s)"
+                ),
             )
         )
 
-    fig = go.Figure(data=[edge_trace, weight_trace, arrow_trace, node_trace], frames=frames)
+    fig = go.Figure(
+        data=[edge_trace, weight_trace, arrow_trace, *initial_dynamic_traces], frames=frames
+    )
 
     fig.update_layout(
-        title="Unicorn 3D Spike Animation",
+        title=f"Unicorn 3D Spike Animation — step {initial_step['step']} ({initial_step['time']:.2f}s)",
         scene=dict(
             xaxis_title="X",
             yaxis_title="Y",
@@ -123,41 +261,44 @@ def main():
                     x=0,
                     y=0,
                     z=0,
-                    text="Edges: green excitatory / red inhibitory, labels show weights, cones show direction",
+                    text="Edges: green excitatory / red inhibitory, bright paths show currently active synapses, rings show recent spike trails",
                     xshift=10,
                     font=dict(size=12),
                 )
             ],
         ),
-        margin=dict(l=0, r=0, b=0, t=50),
+        margin=dict(l=0, r=0, b=0, t=60),
         updatemenus=[
             {
                 "type": "buttons",
+                "direction": "left",
                 "showactive": True,
+                "x": 0.0,
+                "y": 1.08,
                 "buttons": [
-                    {
-                        "label": "Play",
-                        "method": "animate",
-                        "args": [None, {"frame": {"duration": 700, "redraw": True}, "fromcurrent": True}],
-                    },
+                    {"label": label, "method": "animate", "args": animation_args(duration)}
+                    for label, duration in SPEEDS.items()
+                ]
+                + [
                     {
                         "label": "Pause",
                         "method": "animate",
                         "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"}],
-                    },
+                    }
                 ],
             }
         ],
         sliders=[
             {
+                "currentvalue": {"prefix": "Frame: "},
                 "steps": [
                     {
                         "method": "animate",
-                        "label": str(i),
-                        "args": [[str(i)], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}],
+                        "label": f"{step_data['step']} ({step_data['time']:.2f}s)",
+                        "args": [[str(step_data["step"])], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}],
                     }
-                    for i in range(len(history))
-                ]
+                    for step_data in history
+                ],
             }
         ],
     )

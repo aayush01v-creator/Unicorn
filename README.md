@@ -84,6 +84,28 @@ Global simulation settings include:
 - `steps`: number of simulation steps to run
 - `input_current`: constant external drive per neuron
 
+
+## CLI Network Builder
+
+If editing raw JSON by hand gets tedious, use `network_builder.py` to create or update network files directly from the terminal. It works with `samples/network.json` by default, but you can point it at any other path first in the command.
+
+```bash
+python network_builder.py samples/network.json summary
+python network_builder.py samples/network.json add-neuron 3 --threshold 1.1 --membrane-time-constant 5.0 --input-current 0.4
+python network_builder.py samples/network.json add-synapse 2 3 0.8
+python network_builder.py samples/network.json set-config --steps 20 --dt 0.25
+python network_builder.py samples/network.json validate
+```
+
+Supported commands:
+
+- `init`: create a fresh network JSON file
+- `add-neuron`: add a neuron and optionally seed its input current
+- `add-synapse`: add or replace a connection
+- `set-input`: update per-neuron external current
+- `set-config`: update global simulation settings
+- `summary` / `validate`: inspect the resulting network
+
 ## Tutorial: Generate and Inspect the Browser Preview
 
 ### 1. Install dependencies
@@ -132,7 +154,7 @@ Open `viewer/network_preview.html` in a browser and inspect:
 python animate_preview.py
 ```
 
-Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
+Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
 
 ### 6. Iterate on readability
 
