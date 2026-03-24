@@ -6,6 +6,17 @@ Unicorn is an early-stage cross-platform neural network visualization project fo
 
 Right now, the repo is a working prototype with a minimal backend, a simple force-layout engine, and Plotly-based 3D previews for both static inspection and spike animation.
 
+
+## Near-Term Roadmap
+
+The current priority order is:
+
+1. strengthen the simulation layer
+2. improve visualization and playback quality
+3. add collaboration features only after those foundations stabilize
+
+A shared collaboration layer is intentionally deferred for now so we do not lock in sync behavior around a prototype whose data model and UI are still changing quickly.
+
 ## Current Features
 
 - JSON-based network loading
