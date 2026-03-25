@@ -64,6 +64,30 @@ To preserve broad compatibility without blocking high-end performance:
 4. Port synapse rendering and visual effects.
 5. Gate advanced effects behind runtime capability checks and quality presets.
 
+
+## Real-Time Collaboration Architecture (Experimental)
+
+Unicorn's collaboration runtime now splits synchronization by data type:
+
+### 1) Structural Sync with CRDTs (Yjs)
+
+- The declarative scene graph (`neurons`, spatial coordinates, `synapses`, and weights) is represented as a shared Yjs map.
+- Peers join a shared room via `y-webrtc`, which handles eventual-consistent merge semantics for concurrent edits.
+- Result: two collaborators can edit different hidden layers at the same time without merge conflicts or lock coordination.
+
+### 2) Live Spike Sync with WebRTC Snapshot Interpolation
+
+- High-frequency spike activity is intentionally **not** synchronized through CRDT operations.
+- A host streams compact spike snapshots (`step`, timestamp, spike vector) over direct WebRTC data channels.
+- Receiving peers interpolate between snapshots and apply local temporal decay in the render loop to preserve smooth pulse animation under network jitter.
+
+### Session model
+
+- `?session=<id>&role=host` initializes shared structure and broadcasts snapshots.
+- `?session=<id>&role=peer` consumes CRDT structure updates + spike snapshots and renders interpolated activity.
+
+This split keeps structural collaboration conflict-free while avoiding CRDT overhead for per-frame simulation data.
+
 ## Native Physics Engine Integration Plan
 
 To support large networks and mobile/desktop UI clients without blocking UI rendering, integrate a native headless physics module for equilibrium solving.
