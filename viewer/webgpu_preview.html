@@ -28,7 +28,6 @@
     <h1>Unicorn WebGPU Spike Preview</h1>
     <p id="stats"></p>
     <p id="time"></p>
-    <p id="collab"></p>
     <p id="gpu-error"></p>
     <div id="controls">
       <button id="play-toggle">Pause</button>
@@ -42,8 +41,8 @@
     </div>
   </div>
   <canvas id="gpu-canvas"></canvas>
-  <script>
-  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]};
+  <script type="module">
+  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1], "sceneGraph": {"neurons": [{"id": 0, "position": [0.1701, 0.382, 0.4506]}, {"id": 1, "position": [-0.1609, -0.8138, 0.4119]}, {"id": 2, "position": [-0.0092, 0.4318, -0.8625]}], "synapses": [{"from": 0, "to": 1, "weight": 0.6}, {"from": 1, "to": 2, "weight": 0.7}, {"from": 2, "to": 0, "weight": -0.5}]}};
 
   function matMul(a, b) {
     const out = new Float32Array(16);
@@ -355,6 +354,11 @@
     }
 
     const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      gpuError.style.display = "block";
+      gpuError.textContent = "No compatible GPU adapter found.";
+      return;
+    }
     const device = await adapter.requestDevice();
     const canvas = document.getElementById("gpu-canvas");
     const ctx = canvas.getContext("webgpu");
@@ -368,15 +372,9 @@
     }
     window.addEventListener("resize", resize);
     resize();
-    
+
     let sceneGraph = payload.sceneGraph;
-    let geometry = sceneGraph ? buildGeometryFromScene(sceneGraph) : {
-      neuronCount: payload.neuronCount || 0,
-      synapseCount: payload.synapseCount || 0,
-      neuronVertices: new Float32Array(payload.neuronVertices || []),
-      edgeVertices: new Float32Array(payload.edgeVertices || []),
-      idToIndex: new Map(),
-    };
+    let geometry = buildGeometryFromScene(sceneGraph);
     let neuronVerts = geometry.neuronVertices;
     let edgeVerts = geometry.edgeVertices;
     let neuronCount = geometry.neuronCount;
@@ -502,7 +500,7 @@
       depthStencil: undefined,
     });
 
-    const collab = sceneGraph ? await initCollaboration(sceneGraph, rebuildSceneBuffers) : null;
+    const collab = await initCollaboration(sceneGraph, rebuildSceneBuffers);
     const interpolator = new SnapshotInterpolator(neuronCount);
 
     if (collab) {
@@ -534,6 +532,7 @@
       if (!lastTs) {
         lastTs = ts;
       }
+      const now = ts;
       const deltaMs = ts - lastTs;
       lastTs = ts;
       yaw += 0.003;
@@ -560,7 +559,7 @@
       const encoder = device.createCommandEncoder();
 
       if (usingLiveSnapshots) {
-        const interpolated = interpolator.sample(ts);
+        const interpolated = interpolator.sample(now);
         if (interpolated) {
           for (let i = 0; i < liveInterpolated.length; i++) {
             liveInterpolated[i] = Math.max((liveInterpolated[i] || 0) * payload.decay, interpolated[i] || 0);
@@ -601,7 +600,7 @@
         spikesForBroadcast.push(localSpikes[step * neuronCount + i] || 0);
       }
       if (collab?.role === "host") {
-        collab.spikeChannel.broadcast({ time: ts, step, spikes: spikesForBroadcast });
+        collab.spikeChannel.broadcast({ time: now, step, spikes: spikesForBroadcast });
       }
 
       timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;

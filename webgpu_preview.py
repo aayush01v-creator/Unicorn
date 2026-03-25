@@ -362,6 +362,11 @@ HTML_TEMPLATE = """<!doctype html>
     }
 
     const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+      gpuError.style.display = "block";
+      gpuError.textContent = "No compatible GPU adapter found.";
+      return;
+    }
     const device = await adapter.requestDevice();
     const canvas = document.getElementById("gpu-canvas");
     const ctx = canvas.getContext("webgpu");
@@ -535,6 +540,7 @@ HTML_TEMPLATE = """<!doctype html>
       if (!lastTs) {
         lastTs = ts;
       }
+      const now = ts;
       const deltaMs = ts - lastTs;
       lastTs = ts;
       yaw += 0.003;
