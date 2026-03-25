@@ -410,6 +410,16 @@ HTML_TEMPLATE = """<!doctype html>
     const simUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const drawUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
+    function writeSimUniform(stepValue, neuronCountValue, decayValue, boostValue) {
+      const simBytes = new ArrayBuffer(16);
+      const simView = new DataView(simBytes);
+      simView.setUint32(0, stepValue, true);
+      simView.setUint32(4, neuronCountValue, true);
+      simView.setFloat32(8, decayValue, true);
+      simView.setFloat32(12, boostValue, true);
+      device.queue.writeBuffer(simUniformBuffer, 0, simBytes);
+    }
+
     function rebuildSceneBuffers(nextGraph) {
       sceneGraph = nextGraph;
       geometry = buildGeometryFromScene(sceneGraph);
@@ -598,8 +608,7 @@ HTML_TEMPLATE = """<!doctype html>
         }
       }
 
-      const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
-      device.queue.writeBuffer(simUniformBuffer, 0, sim);
+      writeSimUniform(step, neuronCount, payload.decay, payload.boost);
 
       const encoder = device.createCommandEncoder();
 
@@ -612,8 +621,6 @@ HTML_TEMPLATE = """<!doctype html>
           device.queue.writeBuffer(intensityBuffer, 0, liveInterpolated);
         }
       } else {
-        const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
-        device.queue.writeBuffer(simUniformBuffer, 0, sim);
         const cpass = encoder.beginComputePass();
         cpass.setPipeline(computePipeline);
         cpass.setBindGroup(0, computeBG);
