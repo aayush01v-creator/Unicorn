@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unicorn WebGPU Preview</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0b1020; color: #e5e7eb; }
+    #hud { position: fixed; left: 12px; top: 12px; z-index: 10; background: rgba(12,18,40,.85); padding: 10px 12px; border-radius: 10px; border: 1px solid #27304d; }
+    #hud h1 { margin: 0 0 6px 0; font-size: 14px; }
+    #hud p { margin: 2px 0; font-size: 12px; color: #aeb8d6; }
+    #gpu-error { color: #fca5a5; display: none; }
+    canvas { width: 100vw; height: 100vh; display: block; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <h1>Unicorn WebGPU Spike Preview</h1>
+    <p id="stats"></p>
+    <p id="time"></p>
+    <p id="gpu-error"></p>
+  </div>
+  <canvas id="gpu-canvas"></canvas>
+  <script>
+  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1]};
+
+  function matMul(a, b) {
+    const out = new Float32Array(16);
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+      out[r * 4 + c] = 0;
+      for (let k = 0; k < 4; k++) out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
+    }
+    return out;
+  }
+  function perspective(fov, aspect, near, far) {
+    const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
+    return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,(2*far*near)*nf,0]);
+  }
+  function lookAt(eye, target, up) {
+    const zx = eye[0]-target[0], zy = eye[1]-target[1], zz = eye[2]-target[2];
+    const zLen = Math.hypot(zx,zy,zz) || 1;
+    const zxN = zx/zLen, zyN = zy/zLen, zzN = zz/zLen;
+    const xx = up[1]*zzN - up[2]*zyN, xy = up[2]*zxN - up[0]*zzN, xz = up[0]*zyN - up[1]*zxN;
+    const xLen = Math.hypot(xx,xy,xz) || 1;
+    const xxN = xx/xLen, xyN = xy/xLen, xzN = xz/xLen;
+    const yx = zyN*xzN - zzN*xyN, yy = zzN*xxN - zxN*xzN, yz = zxN*xyN - zyN*xxN;
+    return new Float32Array([
+      xxN,yx,zxN,0, xyN,yy,zyN,0, xzN,yz,zzN,0,
+      -(xxN*eye[0]+xyN*eye[1]+xzN*eye[2]),
+      -(yx*eye[0]+yy*eye[1]+yz*eye[2]),
+      -(zxN*eye[0]+zyN*eye[1]+zzN*eye[2]),1
+    ]);
+  }
+
+  async function main() {
+    const stats = document.getElementById("stats");
+    const timeLabel = document.getElementById("time");
+    const gpuError = document.getElementById("gpu-error");
+    stats.textContent = `${payload.neuronCount} neurons · ${payload.synapseCount} synapses · ${payload.stepCount} steps`;
+
+    if (!navigator.gpu) {
+      gpuError.style.display = "block";
+      gpuError.textContent = "WebGPU unavailable in this browser.";
+      return;
+    }
+
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    const canvas = document.getElementById("gpu-canvas");
+    const ctx = canvas.getContext("webgpu");
+    const format = navigator.gpu.getPreferredCanvasFormat();
+
+    function resize() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(canvas.clientWidth * dpr);
+      canvas.height = Math.floor(canvas.clientHeight * dpr);
+      ctx.configure({ device, format, alphaMode: "opaque" });
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    const neuronVerts = new Float32Array(payload.neuronVertices);
+    const edgeVerts = new Float32Array(payload.edgeVertices);
+    const spikes = new Uint32Array(payload.spikes);
+    const neuronCount = payload.neuronCount;
+    const stepCount = payload.stepCount;
+
+    const neuronBuffer = device.createBuffer({ size: neuronVerts.byteLength, usage: GPUBufferUsage.VERTEX, mappedAtCreation: true });
+    new Float32Array(neuronBuffer.getMappedRange()).set(neuronVerts); neuronBuffer.unmap();
+    const edgeBuffer = device.createBuffer({ size: edgeVerts.byteLength, usage: GPUBufferUsage.VERTEX, mappedAtCreation: true });
+    new Float32Array(edgeBuffer.getMappedRange()).set(edgeVerts); edgeBuffer.unmap();
+
+    const spikeBuffer = device.createBuffer({ size: spikes.byteLength, usage: GPUBufferUsage.STORAGE, mappedAtCreation: true });
+    new Uint32Array(spikeBuffer.getMappedRange()).set(spikes); spikeBuffer.unmap();
+    const intensityBuffer = device.createBuffer({ size: neuronCount * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    device.queue.writeBuffer(intensityBuffer, 0, new Float32Array(neuronCount));
+
+    const simUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const drawUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+    const computeModule = device.createShaderModule({code: `
+      struct Sim { step:u32, neuronCount:u32, decay:f32, boost:f32 }
+      @group(0) @binding(0) var<uniform> sim: Sim;
+      @group(0) @binding(1) var<storage, read> spikes: array<u32>;
+      @group(0) @binding(2) var<storage, read_write> intensities: array<f32>;
+      @compute @workgroup_size(64)
+      fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+        let i = gid.x;
+        if (i >= sim.neuronCount) { return; }
+        let idx = sim.step * sim.neuronCount + i;
+        let spike = f32(spikes[idx]);
+        let decayed = intensities[i] * sim.decay;
+        intensities[i] = max(decayed, spike * sim.boost);
+      }`
+    });
+    const drawModule = device.createShaderModule({code: `
+      struct Draw { mvp: mat4x4<f32>, tint: vec4<f32> }
+      @group(0) @binding(0) var<uniform> draw: Draw;
+      @group(0) @binding(1) var<storage, read> intensities: array<f32>;
+      struct In { @location(0) pos: vec3<f32>, @location(1) owner: f32 }
+      struct Out { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> }
+      @vertex
+      fn vs_main(input: In) -> Out {
+        var out: Out;
+        let idx = u32(input.owner);
+        let pulse = clamp(intensities[idx], 0.0, 1.0);
+        out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
+        out.color = vec4<f32>(draw.tint.xyz + vec3<f32>(pulse, pulse * 0.7, 0.0), draw.tint.w);
+        return out;
+      }
+      @fragment
+      fn fs_main(input: Out) -> @location(0) vec4<f32> { return input.color; }`
+    });
+
+    const computeBG = device.createBindGroup({
+      layout: device.createBindGroupLayout({ entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+      ]}),
+      entries: [{binding:0,resource:{buffer:simUniformBuffer}}, {binding:1,resource:{buffer:spikeBuffer}}, {binding:2,resource:{buffer:intensityBuffer}}],
+    });
+    const drawBG = device.createBindGroup({
+      layout: device.createBindGroupLayout({ entries: [
+        { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
+        { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
+      ]}),
+      entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+    });
+
+    const computePipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [computeBG.layout] }),
+      compute: { module: computeModule, entryPoint: "main" },
+    });
+    const renderPipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [drawBG.layout] }),
+      vertex: {
+        module: drawModule, entryPoint: "vs_main",
+        buffers: [{ arrayStride: 16, attributes: [{shaderLocation:0, offset:0, format:"float32x3"}, {shaderLocation:1, offset:12, format:"float32"}] }]
+      },
+      fragment: { module: drawModule, entryPoint: "fs_main", targets: [{ format }] },
+      primitive: { topology: "line-list" },
+      depthStencil: undefined,
+    });
+
+    let step = 0;
+    let yaw = 0.3;
+    function frame() {
+      yaw += 0.003;
+      const radius = payload.cameraRadius;
+      const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
+      const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
+      const view = lookAt(eye, [0,0,0], [0,1,0]);
+      const mvp = matMul(view, proj);
+      const drawData = new Float32Array(20);
+      drawData.set(mvp, 0);
+
+      const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
+      device.queue.writeBuffer(simUniformBuffer, 0, sim);
+
+      const encoder = device.createCommandEncoder();
+      const cpass = encoder.beginComputePass();
+      cpass.setPipeline(computePipeline);
+      cpass.setBindGroup(0, computeBG);
+      cpass.dispatchWorkgroups(Math.ceil(neuronCount / 64));
+      cpass.end();
+
+      const textureView = ctx.getCurrentTexture().createView();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{ view: textureView, clearValue: {r:0.02,g:0.03,b:0.07,a:1}, loadOp: "clear", storeOp: "store" }],
+      });
+      pass.setPipeline(renderPipeline);
+      pass.setBindGroup(0, drawBG);
+      drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
+      device.queue.writeBuffer(drawUniformBuffer, 0, drawData);
+      pass.setVertexBuffer(0, edgeBuffer);
+      pass.draw(edgeVerts.length / 4);
+
+      drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
+      device.queue.writeBuffer(drawUniformBuffer, 0, drawData);
+      pass.setVertexBuffer(0, neuronBuffer);
+      pass.draw(neuronVerts.length / 4);
+      pass.end();
+
+      device.queue.submit([encoder.finish()]);
+
+      timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;
+      step = (step + 1) % stepCount;
+      requestAnimationFrame(frame);
+    }
+    frame();
+  }
+  main();
+  </script>
+</body>
+</html>
