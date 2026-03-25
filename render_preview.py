@@ -1,4 +1,5 @@
 import json
+import argparse
 from pathlib import Path
 
 EXCITATORY_COLOR = "#2ecc71"
@@ -18,6 +19,14 @@ def go_module():
 def load_json(path: str):
     with open(path, "r") as f:
         return json.load(f)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate static 3D network preview HTML.")
+    parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to network JSON")
+    parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON")
+    parser.add_argument("--output", default="viewer/network_preview.html", help="Output HTML path")
+    return parser.parse_args()
 
 
 def synapse_style(weight: float):
@@ -294,16 +303,22 @@ def build_figure(network, pos):
 
 
 def main():
-    network = load_json("samples/network.json")
-    layout = load_json("samples/layout_output.json")
+    args = parse_args()
+    network = load_json(args.network)
+    layout = load_json(args.layout)
     pos = {item["id"]: item["position"] for item in layout}
 
     fig = build_figure(network, pos)
 
-    Path("viewer").mkdir(exist_ok=True)
-    fig.write_html("viewer/network_preview.html", include_plotlyjs=True)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(
+        str(output_path),
+        include_plotlyjs="cdn",
+        config={"responsive": True, "scrollZoom": True, "displaylogo": False},
+    )
 
-    print("Saved: viewer/network_preview.html")
+    print(f"Saved: {output_path}")
 
 
 if __name__ == "__main__":

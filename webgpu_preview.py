@@ -17,6 +17,15 @@ HTML_TEMPLATE = """<!doctype html>
     #hud { position: fixed; left: 12px; top: 12px; z-index: 10; background: rgba(12,18,40,.85); padding: 10px 12px; border-radius: 10px; border: 1px solid #27304d; }
     #hud h1 { margin: 0 0 6px 0; font-size: 14px; }
     #hud p { margin: 2px 0; font-size: 12px; color: #aeb8d6; }
+    #controls { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #controls button, #controls select {
+      background: #18213d;
+      color: #e5e7eb;
+      border: 1px solid #30406e;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
     #gpu-error { color: #fca5a5; display: none; }
     canvas { width: 100vw; height: 100vh; display: block; }
   </style>
@@ -27,6 +36,16 @@ HTML_TEMPLATE = """<!doctype html>
     <p id="stats"></p>
     <p id="time"></p>
     <p id="gpu-error"></p>
+    <div id="controls">
+      <button id="play-toggle">Pause</button>
+      <label for="speed">Speed</label>
+      <select id="speed">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="3">3×</option>
+      </select>
+    </div>
   </div>
   <canvas id="gpu-canvas"></canvas>
   <script>
@@ -64,6 +83,8 @@ HTML_TEMPLATE = """<!doctype html>
     const stats = document.getElementById("stats");
     const timeLabel = document.getElementById("time");
     const gpuError = document.getElementById("gpu-error");
+    const playToggle = document.getElementById("play-toggle");
+    const speedSelect = document.getElementById("speed");
     stats.textContent = `${payload.neuronCount} neurons · ${payload.synapseCount} synapses · ${payload.stepCount} steps`;
 
     if (!navigator.gpu) {
@@ -172,16 +193,44 @@ HTML_TEMPLATE = """<!doctype html>
     });
 
     let step = 0;
+    let paused = false;
+    let speed = 1;
     let yaw = 0.3;
-    function frame() {
+    let accumulatorMs = 0;
+    let lastTs = 0;
+    const stepDurationMs = Math.max(16, payload.dt * 1000);
+
+    playToggle.addEventListener("click", () => {
+      paused = !paused;
+      playToggle.textContent = paused ? "Play" : "Pause";
+    });
+    speedSelect.addEventListener("change", () => {
+      speed = Number(speedSelect.value || 1);
+    });
+
+    function frame(ts) {
+      if (!lastTs) {
+        lastTs = ts;
+      }
+      const deltaMs = ts - lastTs;
+      lastTs = ts;
       yaw += 0.003;
       const radius = payload.cameraRadius;
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(view, proj);
+      const mvp = matMul(proj, view);
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
+
+      if (!paused) {
+        accumulatorMs += deltaMs * speed;
+        const frameAdvance = Math.floor(accumulatorMs / stepDurationMs);
+        if (frameAdvance > 0) {
+          step = (step + frameAdvance) % stepCount;
+          accumulatorMs -= frameAdvance * stepDurationMs;
+        }
+      }
 
       const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
       device.queue.writeBuffer(simUniformBuffer, 0, sim);
@@ -213,7 +262,6 @@ HTML_TEMPLATE = """<!doctype html>
       device.queue.submit([encoder.finish()]);
 
       timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;
-      step = (step + 1) % stepCount;
       requestAnimationFrame(frame);
     }
     frame();
