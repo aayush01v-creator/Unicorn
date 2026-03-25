@@ -651,21 +651,30 @@
       }
 
       const textureView = ctx.getCurrentTexture().createView();
+
+      // 1. Write to uniform buffers BEFORE beginning the render pass
+      drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
+      device.queue.writeBuffer(edgeUniformBuffer, 0, drawData);
+
+      drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
+      device.queue.writeBuffer(neuronUniformBuffer, 0, drawData);
+
+      // 2. Begin the pass
       const pass = encoder.beginRenderPass({
         colorAttachments: [{ view: textureView, clearValue: {r:0.02,g:0.03,b:0.07,a:1}, loadOp: "clear", storeOp: "store" }],
       });
       pass.setPipeline(renderPipeline);
-      drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
-      device.queue.writeBuffer(edgeUniformBuffer, 0, drawData);
+
+      // 3. Draw Edges
       pass.setBindGroup(0, edgeDrawBG);
       pass.setVertexBuffer(0, edgeBuffer);
       pass.draw(edgeVerts.length / 4);
 
-      drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
-      device.queue.writeBuffer(neuronUniformBuffer, 0, drawData);
+      // 4. Draw Neurons
       pass.setBindGroup(0, neuronDrawBG);
       pass.setVertexBuffer(0, neuronBuffer);
       pass.draw(neuronVerts.length / 4);
+      
       pass.end();
 
       device.queue.submit([encoder.finish()]);
