@@ -261,12 +261,14 @@ pip install -r requirements.txt
 
 - Replace `samples/network.json` with your own network file.
 - Tune simulation settings (`dt`, `steps`, `input_current`) and layout settings under `layout`.
-- Add more neurons quickly with the built-in CLI instead of hand-editing JSON:
+- Add more neurons quickly with the built-in CLI instead of hand-editing JSON.
+- From the **repo root** (`~/storage/shared/dev/Unicorn`), run `network_builder.py` from the top level (not `samples/network_builder.py`):
 
 ```bash
-python network_builder.py samples/network.json add-neuron 3 --threshold 1.1 --membrane-time-constant 5.0 --initial-voltage 0.2 --input-current 0.4
-python network_builder.py samples/network.json add-synapse 2 3 0.8
-python network_builder.py samples/network.json summary
+cd ~/storage/shared/dev/Unicorn
+python ./network_builder.py samples/network.json add-neuron 3 --threshold 1.1 --membrane-time-constant 5.0 --initial-voltage 0.2 --input-current 0.4
+python ./network_builder.py samples/network.json add-synapse 2 3 0.8
+python ./network_builder.py samples/network.json summary
 ```
 
 - Customize voltage behavior easily by setting per-neuron `initial_voltage`, `reset_potential`, and `threshold` values (via `network_builder.py` flags or direct JSON edits), then rerun `python main.py samples/network.json` to compare spike/voltage output.
