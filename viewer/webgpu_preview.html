@@ -369,11 +369,11 @@
     window.addEventListener("resize", resize);
     resize();
 
-    let sceneGraph = payload.sceneGraph;
-    let geometry = buildGeometryFromScene(sceneGraph);
-    let neuronVerts = geometry.neuronVertices;
-    let edgeVerts = geometry.edgeVertices;
-    let neuronCount = geometry.neuronCount;
+    let sceneGraph = payload.sceneGraph || null;
+    let geometry = sceneGraph ? buildGeometryFromScene(sceneGraph) : null;
+    let neuronVerts = geometry?.neuronVertices || new Float32Array(payload.neuronVertices || []);
+    let edgeVerts = geometry?.edgeVertices || new Float32Array(payload.edgeVertices || []);
+    let neuronCount = geometry?.neuronCount || payload.neuronCount || 0;
     const stepCount = payload.stepCount;
     const localSpikes = new Uint32Array(payload.spikes);
     let liveInterpolated = new Float32Array(neuronCount);
@@ -554,7 +554,7 @@
       const encoder = device.createCommandEncoder();
 
       if (usingLiveSnapshots) {
-        const interpolated = interpolator.sample(now);
+        const interpolated = interpolator.sample(ts);
         if (interpolated) {
           for (let i = 0; i < liveInterpolated.length; i++) {
             liveInterpolated[i] = Math.max((liveInterpolated[i] || 0) * payload.decay, interpolated[i] || 0);
@@ -595,7 +595,7 @@
         spikesForBroadcast.push(localSpikes[step * neuronCount + i] || 0);
       }
       if (collab?.role === "host") {
-        collab.spikeChannel.broadcast({ time: now, step, spikes: spikesForBroadcast });
+        collab.spikeChannel.broadcast({ time: ts, step, spikes: spikesForBroadcast });
       }
 
       timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;
