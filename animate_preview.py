@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from backend.data_loader.json_loader import load_network
-from backend.neuron_sim.simple_snn import SimpleSNN
+from backend.neuron_sim.framework_runner import run_simulation
 
 
 SPIKE_COLOR = "#f1c40f"
@@ -156,8 +156,7 @@ def main():
     network = load_network("samples/network.json")
     layout = load_json("samples/layout_output.json")
 
-    sim = SimpleSNN(network)
-    history = sim.run()
+    history = run_simulation(network)
 
     pos = {item["id"]: item["position"] for item in layout}
 
