@@ -55,6 +55,20 @@ class NetworkBuilderCliTests(unittest.TestCase):
             self.assertIn("Synapses: 1", summary)
             self.assertIn("Validated", validation)
 
+    def test_cli_rejects_sparse_neuron_ids(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            network_path = Path(tmpdir) / "network.json"
+            self.run_cli(str(network_path), "init")
+
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.run_cli(str(network_path), "add-neuron", "2")
+
+            with network_path.open("r") as f:
+                network = json.load(f)
+
+            self.assertEqual(network["neurons"], [])
+            self.assertEqual(network["input_current"], [])
+
 
 class AnimationHelperTests(unittest.TestCase):
     def test_trail_intensities_decay_over_recent_steps(self):

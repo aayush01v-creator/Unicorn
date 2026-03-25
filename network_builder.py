@@ -113,6 +113,8 @@ def validate_network(network: dict[str, Any]) -> None:
     neuron_ids = [neuron["id"] for neuron in network["neurons"]]
     if len(neuron_ids) != len(set(neuron_ids)):
         raise ValueError("Neuron ids must be unique")
+    if sorted(neuron_ids) != list(range(len(neuron_ids))):
+        raise ValueError("Neuron ids must be contiguous and start at 0")
 
     ensure_input_current_shape(network)
 
