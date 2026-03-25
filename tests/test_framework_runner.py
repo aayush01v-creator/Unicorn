@@ -9,6 +9,10 @@ class FrameworkRunnerTests(unittest.TestCase):
         with patch("backend.neuron_sim.framework_runner._module_available", return_value=False):
             self.assertEqual(select_simulator({"simulator": "auto"}), "simple")
 
+    def test_default_simulator_uses_auto_selection(self):
+        with patch("backend.neuron_sim.framework_runner._module_available", return_value=False):
+            self.assertEqual(select_simulator({}), "simple")
+
     def test_invalid_simulator_raises(self):
         with self.assertRaises(ValueError):
             select_simulator({"simulator": "invalid"})
