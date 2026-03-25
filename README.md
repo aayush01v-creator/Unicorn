@@ -207,6 +207,12 @@ Peer URL example:
 viewer/webgpu_preview.html?session=lab-demo&role=peer
 ```
 
+## Android (Termux) Setup
+
+For a full end-to-end Android Termux walkthrough (install, dependencies, run commands, previews, and troubleshooting), see:
+
+- `docs/setup.md`
+
 ## Native Engine Integration (Planned)
 
 For production mobile/desktop clients, Unicorn is planning a native headless physics integration for force-equilibrium solving:
