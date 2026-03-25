@@ -60,10 +60,10 @@ git clone <YOUR-UNICORN-REPO-URL> Unicorn
 cd Unicorn
 ```
 
-If you already cloned it, just enter it:
+If you already cloned it, just enter your existing repo path (for example `~/Unicorn`):
 
 ```bash
-cd ~/storage/shared/dev/Unicorn
+cd ~/Unicorn
 ```
 
 ---
@@ -249,7 +249,7 @@ python animate_preview.py samples/network.json --layout samples/layout_output.js
 ## 18) Keeping your local copy up to date
 
 ```bash
-cd ~/storage/shared/dev/Unicorn
+cd ~/Unicorn   # or whatever folder you originally cloned into
 git pull
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -262,10 +262,10 @@ pip install -r requirements.txt
 - Replace `samples/network.json` with your own network file.
 - Tune simulation settings (`dt`, `steps`, `input_current`) and layout settings under `layout`.
 - Add more neurons quickly with the built-in CLI instead of hand-editing JSON.
-- From the **repo root** (`~/storage/shared/dev/Unicorn`), run `network_builder.py` from the top level (not `samples/network_builder.py`):
+- From the **repo root** (for example `~/Unicorn` or `~/storage/shared/dev/Unicorn`), run `network_builder.py` from the top level (not `samples/network_builder.py`):
 
 ```bash
-cd ~/storage/shared/dev/Unicorn
+cd ~/Unicorn   # if you are currently in ~/Unicorn/samples, run: cd ..
 python ./network_builder.py samples/network.json add-neuron 3 --threshold 1.1 --membrane-time-constant 5.0 --initial-voltage 0.2 --input-current 0.4
 python ./network_builder.py samples/network.json add-synapse 2 3 0.8
 python ./network_builder.py samples/network.json summary
