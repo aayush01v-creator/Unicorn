@@ -27,6 +27,7 @@ A shared collaboration layer is intentionally deferred for now so we do not lock
 - synapse weight labels plus color intensity mapped to edge strength
 - excitatory vs inhibitory synapse coloring for easier circuit inspection
 - animated spike playback in the browser
+- WebGPU preview now includes an optional collaboration mode with CRDT structural sync (Yjs) and WebRTC spike snapshot streaming/interpolation
 - sample network and generated layout output
 - Termux-friendly development workflow
 
@@ -179,6 +180,32 @@ Example:
 }
 ```
 
+
+
+## Real-Time Collaboration Preview (Experimental)
+
+The generated WebGPU preview can run in a shared collaboration session:
+
+- **Structural sync (CRDT):** scene graph (neurons, positions, synapses, weights) is mirrored through **Yjs** over `y-webrtc`.
+- **Live spike sync (WebRTC snapshots):** the host broadcasts lightweight spike snapshots over direct WebRTC data channels; peers interpolate snapshots client-side for smooth pulse motion.
+
+Run and open the same output file on multiple machines, then use the same `session` query parameter:
+
+```bash
+python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output viewer/webgpu_preview.html
+```
+
+Host URL example:
+
+```
+viewer/webgpu_preview.html?session=lab-demo&role=host
+```
+
+Peer URL example:
+
+```
+viewer/webgpu_preview.html?session=lab-demo&role=peer
+```
 
 ## Native Engine Integration (Planned)
 
