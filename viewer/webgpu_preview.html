@@ -617,7 +617,7 @@
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(proj, view);
+      const mvp = matMul(view, proj);
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
 
