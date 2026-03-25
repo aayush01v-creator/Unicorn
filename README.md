@@ -21,6 +21,7 @@ A shared collaboration layer is intentionally deferred for now so we do not lock
 
 - JSON-based network loading
 - leaky integrate-and-fire simulation with membrane decay, refractory periods, and configurable timesteps
+- optional framework-backed simulation selection (`simple`, `snntorch`, `spikingjelly`, or `auto`)
 - 3D force-directed layout generation
 - interactive 3D HTML preview with synapse direction arrows
 - synapse weight labels plus color intensity mapped to edge strength
@@ -37,7 +38,9 @@ Unicorn/
 │   ├── data_loader/
 │   │   └── json_loader.py
 │   └── neuron_sim/
-│       └── simple_snn.py
+│       ├── framework_runner.py
+│       ├── simple_snn.py
+│       └── torch_snn.py
 ├── physics_engine/
 │   └── force_layout/
 │       └── simple_layout.py
@@ -95,6 +98,42 @@ Global simulation settings include:
 - `steps`: number of simulation steps to run
 - `input_current`: constant external drive per neuron
 
+
+
+## Framework-Backed Simulation
+
+Unicorn now supports selecting a simulation backend via `simulator` in your network JSON:
+
+- `"simple"`: existing pure-Python reference simulator
+- `"snntorch"`: requires `snntorch` (and `torch`)
+- `"spikingjelly"`: requires `spikingjelly` (and `torch`)
+- `"auto"` (default): tries `snntorch`, then `spikingjelly`, then falls back to `simple`
+
+Example:
+
+```json
+{
+  "simulator": "snntorch",
+  "dt": 0.5,
+  "steps": 20
+}
+```
+
+If the chosen framework is not installed, Unicorn raises an import error so missing dependencies are explicit.
+
+### Optional framework installs
+
+Install one of the framework backends if you want tensor-accelerated simulation:
+
+```bash
+# snnTorch backend
+pip install torch snntorch
+
+# SpikingJelly backend
+pip install torch spikingjelly
+```
+
+> Note: both framework modes currently run Unicorn's LIF update loop through the Torch-backed simulator while validating that your selected framework package is installed.
 
 ## CLI Network Builder
 

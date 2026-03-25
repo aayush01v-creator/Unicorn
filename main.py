@@ -1,10 +1,9 @@
 from backend.data_loader.json_loader import load_network
-from backend.neuron_sim.simple_snn import SimpleSNN
+from backend.neuron_sim.framework_runner import run_simulation
 
 def main():
     config = load_network("samples/network.json")
-    sim = SimpleSNN(config)
-    history = sim.run()
+    history = run_simulation(config)
 
     print("=== Simulation Output ===")
     for step_data in history:
