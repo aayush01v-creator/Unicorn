@@ -66,7 +66,7 @@ Unicorn/
 
 2. **Layout**
 
-   `layout_demo.py` computes 3D neuron positions using a simple force-directed layout where neurons repel each other and synapses act like springs.
+   `layout_demo.py` computes 3D neuron positions using a physics-driven force-directed layout: each neuron carries a repulsive charge (Coulomb-style), and each synapse behaves like a spring (Hooke-style).
 
 3. **Preview**
 
@@ -151,6 +151,33 @@ pip install torch spikingjelly
 ```
 
 > Note: both framework modes currently run Unicorn's LIF update loop through the Torch-backed simulator while validating that your selected framework package is installed.
+
+
+### Layout Physics Tuning
+
+You can optionally tune the force simulation in your network JSON under `layout`:
+
+- `k_repulsion`: neuron-to-neuron charge repulsion strength
+- `k_spring`: synapse spring constant
+- `rest_length`: target synapse length in 3D space
+- `dt`: integration timestep for the layout solver
+- `damping`: velocity damping factor to stabilize motion
+- `max_step`: velocity cap per step to prevent explosive motion
+
+Example:
+
+```json
+{
+  "layout": {
+    "k_repulsion": 0.06,
+    "k_spring": 0.09,
+    "rest_length": 1.1,
+    "dt": 0.05,
+    "damping": 0.85,
+    "max_step": 0.15
+  }
+}
+```
 
 ## CLI Network Builder
 
