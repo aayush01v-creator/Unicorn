@@ -34,10 +34,20 @@ class SimpleSNN:
 
         configured_current = config.get("input_current", [0.0] * self.n)
         self.input_current = [float(current) for current in configured_current]
+        if len(self.input_current) < self.n:
+            self.input_current.extend([0.0] * (self.n - len(self.input_current)))
+        elif len(self.input_current) > self.n:
+            self.input_current = self.input_current[: self.n]
 
         self.weights = [[0.0 for _ in range(self.n)] for _ in range(self.n)]
         for synapse in self.synapses:
-            self.weights[synapse["from"]][synapse["to"]] = float(synapse["weight"])
+            pre = int(synapse["from"])
+            post = int(synapse["to"])
+            if pre < 0 or post < 0 or pre >= self.n or post >= self.n:
+                raise ValueError(
+                    f"Synapse {pre} -> {post} references an invalid neuron index for network size {self.n}"
+                )
+            self.weights[pre][post] = float(synapse["weight"])
 
     def run(self):
         history = []

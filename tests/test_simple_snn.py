@@ -51,6 +51,29 @@ class SimpleSNNTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SimpleSNN(config)
 
+    def test_input_current_is_normalized_to_neuron_count(self):
+        config = {
+            "neurons": [{"id": 0}, {"id": 1}],
+            "synapses": [],
+            "input_current": [1.0],
+            "steps": 1,
+            "dt": 1.0,
+        }
+
+        history = SimpleSNN(config).run()
+
+        self.assertEqual(len(history[0]["voltages"]), 2)
+        self.assertEqual(history[0]["voltages"][1], 0.0)
+
+    def test_invalid_synapse_reference_raises(self):
+        config = {
+            "neurons": [{"id": 0}],
+            "synapses": [{"from": 0, "to": 1, "weight": 0.5}],
+        }
+
+        with self.assertRaises(ValueError):
+            SimpleSNN(config)
+
 
 if __name__ == "__main__":
     unittest.main()
