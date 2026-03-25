@@ -370,7 +370,13 @@
     resize();
     
     let sceneGraph = payload.sceneGraph;
-    let geometry = buildGeometryFromScene(sceneGraph);
+    let geometry = sceneGraph ? buildGeometryFromScene(sceneGraph) : {
+      neuronCount: payload.neuronCount || 0,
+      synapseCount: payload.synapseCount || 0,
+      neuronVertices: new Float32Array(payload.neuronVertices || []),
+      edgeVertices: new Float32Array(payload.edgeVertices || []),
+      idToIndex: new Map(),
+    };
     let neuronVerts = geometry.neuronVertices;
     let edgeVerts = geometry.edgeVertices;
     let neuronCount = geometry.neuronCount;
@@ -496,7 +502,7 @@
       depthStencil: undefined,
     });
 
-    const collab = await initCollaboration(sceneGraph, rebuildSceneBuffers);
+    const collab = sceneGraph ? await initCollaboration(sceneGraph, rebuildSceneBuffers) : null;
     const interpolator = new SnapshotInterpolator(neuronCount);
 
     if (collab) {
