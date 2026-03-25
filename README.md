@@ -179,6 +179,18 @@ Example:
 }
 ```
 
+
+## Native Engine Integration (Planned)
+
+For production mobile/desktop clients, Unicorn is planning a native headless physics integration for force-equilibrium solving:
+
+- Rust + Rapier or C++ + Jolt as the compute engine
+- Flutter FFI and React Native JSI bindings for direct UI integration
+- background worker execution so equilibrium solving never blocks the main UI thread
+- a shared C ABI to keep Android, iOS, Windows, and Linux support aligned
+
+See `docs/architecture.md` for the detailed integration plan and ABI/threading model.
+
 ## CLI Network Builder
 
 If editing raw JSON by hand gets tedious, use `network_builder.py` to create or update network files directly from the terminal. It works with `samples/network.json` by default, but you can point it at any other path first in the command.
