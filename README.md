@@ -191,6 +191,12 @@ For production mobile/desktop clients, Unicorn is planning a native headless phy
 
 See `docs/architecture.md` for the detailed integration plan and ABI/threading model.
 
+## High-Scale Rendering Roadmap (Planned)
+
+For inspection and small-to-medium demos, the current browser preview is sufficient. For massive workloads (thousands of neurons, millions of spikes), Unicorn's architecture now targets a **WebGPU-first** renderer path with compute-shader-driven spike effects and reduced CPU overhead, while retaining WebGL/Plotly compatibility fallbacks.
+
+See `docs/architecture.md` for the proposed GPU pipeline, capability tiers, and migration stages.
+
 ## CLI Network Builder
 
 If editing raw JSON by hand gets tedious, use `network_builder.py` to create or update network files directly from the terminal. It works with `samples/network.json` by default, but you can point it at any other path first in the command.
@@ -262,13 +268,21 @@ python animate_preview.py
 
 Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
 
-### 6. Iterate on readability
+### 6. Build the WebGPU prototype preview (high-scale path)
+
+```bash
+python webgpu_preview.py --layout samples/layout_output.json --history samples/spike_history.json
+```
+
+This generates `viewer/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
+
+### 7. Iterate on readability
 
 A practical workflow is:
 
 1. edit `samples/network.json`
 2. rerun `python layout_demo.py`
-3. rerun `python render_preview.py` and/or `python animate_preview.py`
+3. rerun `python render_preview.py`, `python animate_preview.py`, and/or `python webgpu_preview.py`
 4. refresh the browser tab
 
 If your preview looks too dense, reduce the number of edges temporarily or scale the network into smaller subcircuits before rendering.

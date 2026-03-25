@@ -8,6 +8,62 @@ Unicorn currently keeps simulation and layout generation in Python, then renders
 - `physics_engine/`: force-directed layout solver
 - `viewer/`: HTML-based 3D preview and spike playback
 
+## High-Performance Graphics Rendering Plan
+
+Today, browser previews are built with Plotly and are excellent for inspection-scale workloads. For very large simulations (thousands of neurons and millions of spikes), Unicorn should move toward a GPU-first rendering stack with explicit data-oriented pipelines.
+
+### Why move beyond traditional WebGL wrappers
+
+Open-source efforts such as SNNtrainer3D show that WebGL + Three.js can deliver compelling 3D neural visualization in the browser. That remains a good baseline for compatibility and rapid iteration.
+
+At Unicorn's target scale, however, the bottleneck shifts to:
+
+- per-frame CPU orchestration
+- draw-call overhead
+- limited control of memory transfers and synchronization
+
+### WebGPU as the primary high-scale path
+
+Adopt **WebGPU** as the advanced renderer path across modern Chromium, WebKit, and Gecko-based browsers. WebGPU exposes lower-level GPU primitives and explicit command submission, which allows:
+
+- persistent GPU buffers for neuron positions, morphology metadata, and spike event streams
+- batched/instanced rendering for dense node and edge populations
+- compute shaders for spike pulse propagation, bloom masks, and temporal decay fields
+- reduced CPU-GPU synchronization points during playback
+
+This model keeps spike animation logic on the GPU, where millions of simultaneous traveling signals can be processed in parallel.
+
+### Proposed render pipeline
+
+1. **Upload phase:** serialize network geometry once into device-local buffers.
+2. **Streaming phase:** append per-timestep spike events into ring buffers.
+3. **Compute pass:** update pulse state (position, intensity, lifetime) in parallel.
+4. **Render pass:** draw neurons/synapses using instancing and GPU-side color ramps.
+5. **Post-process pass (optional):** apply glow/halo effects for active spikes.
+
+### Data layout guidance
+
+- Prefer struct-of-arrays layouts for coalesced memory access in compute kernels.
+- Use compact index buffers for synapse traversal and source/target lookup.
+- Keep spike events in fixed-size chunks to avoid reallocations during bursts.
+- Encode static vs dynamic attributes separately to minimize upload bandwidth.
+
+### Capability tiers
+
+To preserve broad compatibility without blocking high-end performance:
+
+- **Tier A (default modern path):** WebGPU renderer.
+- **Tier B (fallback):** existing WebGL/Plotly preview for unsupported environments.
+- **Tier C (headless export):** server/offline frame generation for datasets too large for interactive sessions.
+
+### Incremental migration strategy
+
+1. Keep current viewer flow as a stable baseline.
+2. Add a WebGPU prototype for neuron point-cloud rendering.
+3. Introduce compute-driven spike pulse animation and benchmark CPU/GPU frame time.
+4. Port synapse rendering and visual effects.
+5. Gate advanced effects behind runtime capability checks and quality presets.
+
 ## Native Physics Engine Integration Plan
 
 To support large networks and mobile/desktop UI clients without blocking UI rendering, integrate a native headless physics module for equilibrium solving.
