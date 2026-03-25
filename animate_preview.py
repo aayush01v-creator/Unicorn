@@ -1,3 +1,4 @@
+import argparse
 import json
 from pathlib import Path
 
@@ -149,12 +150,22 @@ def animation_args(duration):
     return [None, {"frame": {"duration": duration, "redraw": True}, "fromcurrent": True}]
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate spike animation from network/layout files.")
+    parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
+    parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON file")
+    parser.add_argument("--output", default="viewer/spike_animation.html", help="Animation HTML output path")
+    parser.add_argument("--history-output", default="samples/spike_history.json", help="Spike history JSON output path")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     go = go_module()
     from render_preview import build_edge_geometry
 
-    network = load_network("samples/network.json")
-    layout = load_json("samples/layout_output.json")
+    network = load_network(args.network)
+    layout = load_json(args.layout)
 
     history = run_simulation(network)
 
@@ -302,14 +313,17 @@ def main():
         ],
     )
 
-    Path("viewer").mkdir(exist_ok=True)
-    fig.write_html("viewer/spike_animation.html", include_plotlyjs=True)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(output_path), include_plotlyjs=True)
 
-    with open("samples/spike_history.json", "w") as f:
+    history_path = Path(args.history_output)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    with history_path.open("w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
-    print("Saved: viewer/spike_animation.html")
-    print("Saved: samples/spike_history.json")
+    print(f"Saved: {output_path}")
+    print(f"Saved: {history_path}")
 
 
 if __name__ == "__main__":

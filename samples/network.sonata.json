@@ -1,0 +1,46 @@
+{
+  "simulation": {
+    "dt": 0.5,
+    "steps": 10
+  },
+  "nodes": [
+    {
+      "node_id": 100,
+      "threshold": 1.0,
+      "membrane_time_constant": 4.0,
+      "refractory_period": 1.0,
+      "input_current": 1.2
+    },
+    {
+      "node_id": 101,
+      "threshold": 1.0,
+      "membrane_time_constant": 6.0,
+      "refractory_period": 1.0,
+      "input_current": 0.0
+    },
+    {
+      "node_id": 102,
+      "threshold": 1.0,
+      "membrane_time_constant": 5.0,
+      "refractory_period": 2.0,
+      "input_current": 0.0
+    }
+  ],
+  "edges": [
+    {
+      "source_node_id": 100,
+      "target_node_id": 101,
+      "weight": 0.6
+    },
+    {
+      "source_node_id": 101,
+      "target_node_id": 102,
+      "weight": 0.7
+    },
+    {
+      "source_node_id": 102,
+      "target_node_id": 100,
+      "weight": -0.5
+    }
+  ]
+}
