@@ -408,7 +408,18 @@ HTML_TEMPLATE = """<!doctype html>
     device.queue.writeBuffer(intensityBuffer, 0, new Float32Array(Math.max(neuronCount, 1)));
 
     const simUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const drawUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const edgeUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const neuronUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+
+    function writeSimUniform(stepValue, neuronCountValue, decayValue, boostValue) {
+      const simBytes = new ArrayBuffer(16);
+      const simView = new DataView(simBytes);
+      simView.setUint32(0, stepValue, true);
+      simView.setUint32(4, neuronCountValue, true);
+      simView.setFloat32(8, decayValue, true);
+      simView.setFloat32(12, boostValue, true);
+      device.queue.writeBuffer(simUniformBuffer, 0, simBytes);
+    }
 
     function rebuildSceneBuffers(nextGraph) {
       sceneGraph = nextGraph;
@@ -431,17 +442,27 @@ HTML_TEMPLATE = """<!doctype html>
         layout: computeBindGroupLayout,
         entries: [{binding:0,resource:{buffer:simUniformBuffer}}, {binding:1,resource:{buffer:spikeBuffer}}, {binding:2,resource:{buffer:intensityBuffer}}],
       });
-      const nextDrawBG = usePulseShader
+      const nextEdgeDrawBG = usePulseShader
         ? device.createBindGroup({
             layout: drawBindGroupLayout,
-            entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+            entries: [{binding:0,resource:{buffer:edgeUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
           })
         : device.createBindGroup({
             layout: drawFallbackBindGroupLayout,
-            entries: [{binding:0,resource:{buffer:drawUniformBuffer}}],
+            entries: [{binding:0,resource:{buffer:edgeUniformBuffer}}],
+          });
+      const nextNeuronDrawBG = usePulseShader
+        ? device.createBindGroup({
+            layout: drawBindGroupLayout,
+            entries: [{binding:0,resource:{buffer:neuronUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+          })
+        : device.createBindGroup({
+            layout: drawFallbackBindGroupLayout,
+            entries: [{binding:0,resource:{buffer:neuronUniformBuffer}}],
           });
       computeBG = nextComputeBG;
-      drawBG = nextDrawBG;
+      edgeDrawBG = nextEdgeDrawBG;
+      neuronDrawBG = nextNeuronDrawBG;
       stats.textContent = `${neuronCount} neurons · ${geometry.synapseCount} synapses · ${stepCount} steps`;
     }
 
@@ -511,20 +532,29 @@ HTML_TEMPLATE = """<!doctype html>
       layout: computeBindGroupLayout,
       entries: [{binding:0,resource:{buffer:simUniformBuffer}}, {binding:1,resource:{buffer:spikeBuffer}}, {binding:2,resource:{buffer:intensityBuffer}}],
     });
-    let drawBG = null;
+    let edgeDrawBG = null;
+    let neuronDrawBG = null;
     let activeDrawBindGroupLayout = drawBindGroupLayout;
     let usePulseShader = true;
     try {
-      drawBG = device.createBindGroup({
+      edgeDrawBG = device.createBindGroup({
         layout: drawBindGroupLayout,
-        entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+        entries: [{binding:0,resource:{buffer:edgeUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+      });
+      neuronDrawBG = device.createBindGroup({
+        layout: drawBindGroupLayout,
+        entries: [{binding:0,resource:{buffer:neuronUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
       });
     } catch (_error) {
       usePulseShader = false;
       activeDrawBindGroupLayout = drawFallbackBindGroupLayout;
-      drawBG = device.createBindGroup({
+      edgeDrawBG = device.createBindGroup({
         layout: drawFallbackBindGroupLayout,
-        entries: [{binding:0,resource:{buffer:drawUniformBuffer}}],
+        entries: [{binding:0,resource:{buffer:edgeUniformBuffer}}],
+      });
+      neuronDrawBG = device.createBindGroup({
+        layout: drawFallbackBindGroupLayout,
+        entries: [{binding:0,resource:{buffer:neuronUniformBuffer}}],
       });
       gpuError.style.display = "block";
       gpuError.textContent = "Limited WebGPU mode: vertex storage buffers unsupported; spike pulse glow disabled.";
@@ -598,8 +628,7 @@ HTML_TEMPLATE = """<!doctype html>
         }
       }
 
-      const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
-      device.queue.writeBuffer(simUniformBuffer, 0, sim);
+      writeSimUniform(step, neuronCount, payload.decay, payload.boost);
 
       const encoder = device.createCommandEncoder();
 
@@ -612,8 +641,6 @@ HTML_TEMPLATE = """<!doctype html>
           device.queue.writeBuffer(intensityBuffer, 0, liveInterpolated);
         }
       } else {
-        const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
-        device.queue.writeBuffer(simUniformBuffer, 0, sim);
         const cpass = encoder.beginComputePass();
         cpass.setPipeline(computePipeline);
         cpass.setBindGroup(0, computeBG);
@@ -626,14 +653,15 @@ HTML_TEMPLATE = """<!doctype html>
         colorAttachments: [{ view: textureView, clearValue: {r:0.02,g:0.03,b:0.07,a:1}, loadOp: "clear", storeOp: "store" }],
       });
       pass.setPipeline(renderPipeline);
-      pass.setBindGroup(0, drawBG);
       drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
-      device.queue.writeBuffer(drawUniformBuffer, 0, drawData);
+      device.queue.writeBuffer(edgeUniformBuffer, 0, drawData);
+      pass.setBindGroup(0, edgeDrawBG);
       pass.setVertexBuffer(0, edgeBuffer);
       pass.draw(edgeVerts.length / 4);
 
       drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
-      device.queue.writeBuffer(drawUniformBuffer, 0, drawData);
+      device.queue.writeBuffer(neuronUniformBuffer, 0, drawData);
+      pass.setBindGroup(0, neuronDrawBG);
       pass.setVertexBuffer(0, neuronBuffer);
       pass.draw(neuronVerts.length / 4);
       pass.end();
