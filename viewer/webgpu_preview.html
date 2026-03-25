@@ -423,10 +423,15 @@
         layout: computeBindGroupLayout,
         entries: [{binding:0,resource:{buffer:simUniformBuffer}}, {binding:1,resource:{buffer:spikeBuffer}}, {binding:2,resource:{buffer:intensityBuffer}}],
       });
-      const nextDrawBG = device.createBindGroup({
-        layout: drawBindGroupLayout,
-        entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
-      });
+      const nextDrawBG = usePulseShader
+        ? device.createBindGroup({
+            layout: drawBindGroupLayout,
+            entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+          })
+        : device.createBindGroup({
+            layout: drawFallbackBindGroupLayout,
+            entries: [{binding:0,resource:{buffer:drawUniformBuffer}}],
+          });
       computeBG = nextComputeBG;
       drawBG = nextDrawBG;
       stats.textContent = `${neuronCount} neurons · ${geometry.synapseCount} synapses · ${stepCount} steps`;
@@ -465,6 +470,21 @@
       @fragment
       fn fs_main(input: Out) -> @location(0) vec4<f32> { return input.color; }`
     });
+    const drawFallbackModule = device.createShaderModule({code: `
+      struct Draw { mvp: mat4x4<f32>, tint: vec4<f32> }
+      @group(0) @binding(0) var<uniform> draw: Draw;
+      struct In { @location(0) pos: vec3<f32>, @location(1) owner: f32 }
+      struct Out { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> }
+      @vertex
+      fn vs_main(input: In) -> Out {
+        var out: Out;
+        out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
+        out.color = draw.tint;
+        return out;
+      }
+      @fragment
+      fn fs_main(input: Out) -> @location(0) vec4<f32> { return input.color; }`
+    });
 
     const computeBindGroupLayout = device.createBindGroupLayout({ entries: [
       { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
@@ -475,27 +495,44 @@
       { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
       { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
     ]});
+    const drawFallbackBindGroupLayout = device.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: "uniform" } },
+    ]});
 
     let computeBG = device.createBindGroup({
       layout: computeBindGroupLayout,
       entries: [{binding:0,resource:{buffer:simUniformBuffer}}, {binding:1,resource:{buffer:spikeBuffer}}, {binding:2,resource:{buffer:intensityBuffer}}],
     });
-    let drawBG = device.createBindGroup({
-      layout: drawBindGroupLayout,
-      entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
-    });
+    let drawBG = null;
+    let activeDrawBindGroupLayout = drawBindGroupLayout;
+    let usePulseShader = true;
+    try {
+      drawBG = device.createBindGroup({
+        layout: drawBindGroupLayout,
+        entries: [{binding:0,resource:{buffer:drawUniformBuffer}}, {binding:1,resource:{buffer:intensityBuffer}}],
+      });
+    } catch (_error) {
+      usePulseShader = false;
+      activeDrawBindGroupLayout = drawFallbackBindGroupLayout;
+      drawBG = device.createBindGroup({
+        layout: drawFallbackBindGroupLayout,
+        entries: [{binding:0,resource:{buffer:drawUniformBuffer}}],
+      });
+      gpuError.style.display = "block";
+      gpuError.textContent = "Limited WebGPU mode: vertex storage buffers unsupported; spike pulse glow disabled.";
+    }
 
     const computePipeline = device.createComputePipeline({
       layout: device.createPipelineLayout({ bindGroupLayouts: [computeBindGroupLayout] }),
       compute: { module: computeModule, entryPoint: "main" },
     });
     const renderPipeline = device.createRenderPipeline({
-      layout: device.createPipelineLayout({ bindGroupLayouts: [drawBindGroupLayout] }),
+      layout: device.createPipelineLayout({ bindGroupLayouts: [activeDrawBindGroupLayout] }),
       vertex: {
-        module: drawModule, entryPoint: "vs_main",
+        module: usePulseShader ? drawModule : drawFallbackModule, entryPoint: "vs_main",
         buffers: [{ arrayStride: 16, attributes: [{shaderLocation:0, offset:0, format:"float32x3"}, {shaderLocation:1, offset:12, format:"float32"}] }]
       },
-      fragment: { module: drawModule, entryPoint: "fs_main", targets: [{ format }] },
+      fragment: { module: usePulseShader ? drawModule : drawFallbackModule, entryPoint: "fs_main", targets: [{ format }] },
       primitive: { topology: "line-list" },
       depthStencil: undefined,
     });
