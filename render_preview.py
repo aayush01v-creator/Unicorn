@@ -88,7 +88,7 @@ def build_edge_geometry(network, pos):
 
     max_abs_weight = max(abs(syn.get("weight", 0.0)) for syn in network["synapses"]) or 1.0
 
-    edge_x, edge_y, edge_z, edge_colors = [], [], [], []
+    edge_x, edge_y, edge_z = [], [], []
     mid_x, mid_y, mid_z, weights, weight_text = [], [], [], [], []
     arrow_x, arrow_y, arrow_z = [], [], []
     arrow_u, arrow_v, arrow_w, arrow_colors = [], [], [], []
@@ -105,7 +105,6 @@ def build_edge_geometry(network, pos):
         edge_x += [start[0], end[0], None]
         edge_y += [start[1], end[1], None]
         edge_z += [start[2], end[2], None]
-        edge_colors += [weight, weight, None]
         line_widths.append(3 + (3 * normalized_weight))
 
         midpoint = [(start[i] + end[i]) / 2 for i in range(3)]
@@ -130,7 +129,6 @@ def build_edge_geometry(network, pos):
         "edge_x": edge_x,
         "edge_y": edge_y,
         "edge_z": edge_z,
-        "edge_colors": edge_colors,
         "mid_x": mid_x,
         "mid_y": mid_y,
         "mid_z": mid_z,
@@ -192,11 +190,7 @@ def build_figure(network, pos):
         mode="lines",
         line=dict(
             width=avg_line_width,
-            color=geometry["edge_colors"],
-            colorscale=WEIGHT_COLORSCALE,
-            cmin=-geometry["max_abs_weight"],
-            cmax=geometry["max_abs_weight"],
-            colorbar=dict(title="Weight", len=0.7),
+            color="#b8c2cc",
         ),
         hoverinfo="none",
         name="Synapses",
