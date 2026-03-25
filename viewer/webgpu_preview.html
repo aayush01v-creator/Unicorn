@@ -368,12 +368,12 @@
     }
     window.addEventListener("resize", resize);
     resize();
-
-    let sceneGraph = payload.sceneGraph || null;
-    let geometry = sceneGraph ? buildGeometryFromScene(sceneGraph) : null;
-    let neuronVerts = geometry?.neuronVertices || new Float32Array(payload.neuronVertices || []);
-    let edgeVerts = geometry?.edgeVertices || new Float32Array(payload.edgeVertices || []);
-    let neuronCount = geometry?.neuronCount || payload.neuronCount || 0;
+    
+    let sceneGraph = payload.sceneGraph;
+    let geometry = buildGeometryFromScene(sceneGraph);
+    let neuronVerts = geometry.neuronVertices;
+    let edgeVerts = geometry.edgeVertices;
+    let neuronCount = geometry.neuronCount;
     const stepCount = payload.stepCount;
     const localSpikes = new Uint32Array(payload.spikes);
     let liveInterpolated = new Float32Array(neuronCount);
