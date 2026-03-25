@@ -315,7 +315,11 @@ def main():
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(str(output_path), include_plotlyjs=True)
+    fig.write_html(
+        str(output_path),
+        include_plotlyjs="cdn",
+        config={"responsive": True, "scrollZoom": True, "displaylogo": False},
+    )
 
     history_path = Path(args.history_output)
     history_path.parent.mkdir(parents=True, exist_ok=True)

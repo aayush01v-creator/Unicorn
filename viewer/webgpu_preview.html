@@ -9,6 +9,15 @@
     #hud { position: fixed; left: 12px; top: 12px; z-index: 10; background: rgba(12,18,40,.85); padding: 10px 12px; border-radius: 10px; border: 1px solid #27304d; }
     #hud h1 { margin: 0 0 6px 0; font-size: 14px; }
     #hud p { margin: 2px 0; font-size: 12px; color: #aeb8d6; }
+    #controls { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #controls button, #controls select {
+      background: #18213d;
+      color: #e5e7eb;
+      border: 1px solid #30406e;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
     #gpu-error { color: #fca5a5; display: none; }
     #collab-error { color: #fca5a5; display: none; }
     canvas { width: 100vw; height: 100vh; display: block; }
@@ -21,11 +30,20 @@
     <p id="time"></p>
     <p id="collab"></p>
     <p id="gpu-error"></p>
-    <p id="collab-error"></p>
+    <div id="controls">
+      <button id="play-toggle">Pause</button>
+      <label for="speed">Speed</label>
+      <select id="speed">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="3">3×</option>
+      </select>
+    </div>
   </div>
   <canvas id="gpu-canvas"></canvas>
-  <script type="module">
-  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1], "sceneGraph": {"neurons": [{"id": 0, "position": [0.1701, 0.382, 0.4506]}, {"id": 1, "position": [-0.1609, -0.8138, 0.4119]}, {"id": 2, "position": [-0.0092, 0.4318, -0.8625]}], "synapses": [{"from": 0, "to": 1, "weight": 0.6}, {"from": 1, "to": 2, "weight": 0.7}, {"from": 2, "to": 0, "weight": -0.5}]}};
+  <script>
+  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0]};
 
   function matMul(a, b) {
     const out = new Float32Array(16);
@@ -326,6 +344,9 @@
     const stats = document.getElementById("stats");
     const timeLabel = document.getElementById("time");
     const gpuError = document.getElementById("gpu-error");
+    const playToggle = document.getElementById("play-toggle");
+    const speedSelect = document.getElementById("speed");
+    stats.textContent = `${payload.neuronCount} neurons · ${payload.synapseCount} synapses · ${payload.stepCount} steps`;
 
     if (!navigator.gpu) {
       gpuError.style.display = "block";
@@ -488,18 +509,47 @@
     }
 
     let step = 0;
+    let paused = false;
+    let speed = 1;
     let yaw = 0.3;
-    stats.textContent = `${neuronCount} neurons · ${geometry.synapseCount} synapses · ${stepCount} steps`;
+    let accumulatorMs = 0;
+    let lastTs = 0;
+    const stepDurationMs = Math.max(16, payload.dt * 1000);
 
-    function frame(now) {
+    playToggle.addEventListener("click", () => {
+      paused = !paused;
+      playToggle.textContent = paused ? "Play" : "Pause";
+    });
+    speedSelect.addEventListener("change", () => {
+      speed = Number(speedSelect.value || 1);
+    });
+
+    function frame(ts) {
+      if (!lastTs) {
+        lastTs = ts;
+      }
+      const deltaMs = ts - lastTs;
+      lastTs = ts;
       yaw += 0.003;
       const radius = payload.cameraRadius;
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(view, proj);
+      const mvp = matMul(proj, view);
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
+
+      if (!paused) {
+        accumulatorMs += deltaMs * speed;
+        const frameAdvance = Math.floor(accumulatorMs / stepDurationMs);
+        if (frameAdvance > 0) {
+          step = (step + frameAdvance) % stepCount;
+          accumulatorMs -= frameAdvance * stepDurationMs;
+        }
+      }
+
+      const sim = new Float32Array([step, neuronCount, payload.decay, payload.boost]);
+      device.queue.writeBuffer(simUniformBuffer, 0, sim);
 
       const encoder = device.createCommandEncoder();
 
@@ -549,7 +599,6 @@
       }
 
       timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;
-      step = (step + 1) % stepCount;
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
