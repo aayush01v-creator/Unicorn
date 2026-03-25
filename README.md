@@ -38,7 +38,9 @@ Unicorn/
 │   ├── data_loader/
 │   │   └── json_loader.py
 │   └── neuron_sim/
-│       └── simple_snn.py
+│       ├── framework_runner.py
+│       ├── simple_snn.py
+│       └── torch_snn.py
 ├── physics_engine/
 │   └── force_layout/
 │       └── simple_layout.py
@@ -118,6 +120,20 @@ Example:
 ```
 
 If the chosen framework is not installed, Unicorn raises an import error so missing dependencies are explicit.
+
+### Optional framework installs
+
+Install one of the framework backends if you want tensor-accelerated simulation:
+
+```bash
+# snnTorch backend
+pip install torch snntorch
+
+# SpikingJelly backend
+pip install torch spikingjelly
+```
+
+> Note: both framework modes currently run Unicorn's LIF update loop through the Torch-backed simulator while validating that your selected framework package is installed.
 
 ## CLI Network Builder
 
