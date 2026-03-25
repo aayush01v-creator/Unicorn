@@ -19,7 +19,7 @@ A shared collaboration layer is intentionally deferred for now so we do not lock
 
 ## Current Features
 
-- JSON-based network loading
+- standardized network loading from Unicorn JSON, SONATA-style JSON, and NeuroML (`.nml`/`.xml`)
 - leaky integrate-and-fire simulation with membrane decay, refractory periods, and configurable timesteps
 - optional framework-backed simulation selection (`simple`, `snntorch`, `spikingjelly`, or `auto`)
 - 3D force-directed layout generation
@@ -62,7 +62,7 @@ Unicorn/
 
 1. **Simulation**
 
-   `main.py` loads a sample network and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
+   `main.py` loads a network file (Unicorn JSON, SONATA-style JSON, or NeuroML) and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
 
 2. **Layout**
 
@@ -97,6 +97,23 @@ Global simulation settings include:
 - `dt`: simulation timestep used for integration and refractory countdowns
 - `steps`: number of simulation steps to run
 - `input_current`: constant external drive per neuron
+
+## Standardized Data Formats
+
+The loader in `backend/data_loader/json_loader.py` now normalizes multiple data formats into Unicorn's internal schema:
+
+- **Unicorn JSON**: existing native format (`neurons`, `synapses`, `steps`, `dt`, etc.)
+- **SONATA-style JSON**: uses `nodes` + `edges` sections with identifiers such as `node_id`, `source_node_id`, and `target_node_id`
+- **NeuroML**: parses `.nml` / `.xml` networks with `<population>` and `<projection>/<connection>` elements
+
+Try the sample files directly:
+
+```bash
+python main.py samples/network.sonata.json
+python main.py samples/network.nml
+python layout_demo.py samples/network.sonata.json --output samples/layout_output.json
+python animate_preview.py samples/network.nml --layout samples/layout_output.json
+```
 
 
 
