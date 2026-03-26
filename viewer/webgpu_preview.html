@@ -42,7 +42,7 @@
   </div>
   <canvas id="gpu-canvas"></canvas>
   <script type="module">
-  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1], "sceneGraph": {"neurons": [{"id": 0, "position": [0.1701, 0.382, 0.4506]}, {"id": 1, "position": [-0.1609, -0.8138, 0.4119]}, {"id": 2, "position": [-0.0092, 0.4318, -0.8625]}], "synapses": [{"from": 0, "to": 1, "weight": 0.6}, {"from": 1, "to": 2, "weight": 0.7}, {"from": 2, "to": 0, "weight": -0.5}]}};
+  const payload = {"neuronCount": 3, "synapseCount": 3, "stepCount": 10, "dt": 0.5, "decay": 0.92, "boost": 1.0, "cameraRadius": 3.28275, "neuronVertices": [0.1504035, 0.382, 0.4506, 0.0, 0.1897965, 0.382, 0.4506, 0.0, 0.1701, 0.3623035, 0.4506, 0.0, 0.1701, 0.4016965, 0.4506, 0.0, 0.1701, 0.382, 0.4309035, 0.0, 0.1701, 0.382, 0.4702965, 0.0, -0.1805965, -0.8138, 0.4119, 1.0, -0.14120349999999998, -0.8138, 0.4119, 1.0, -0.1609, -0.8334965, 0.4119, 1.0, -0.1609, -0.7941035, 0.4119, 1.0, -0.1609, -0.8138, 0.3922035, 1.0, -0.1609, -0.8138, 0.4315965, 1.0, -0.0288965, 0.4318, -0.8625, 2.0, 0.010496499999999999, 0.4318, -0.8625, 2.0, -0.0092, 0.4121035, -0.8625, 2.0, -0.0092, 0.4514965, -0.8625, 2.0, -0.0092, 0.4318, -0.8821965, 2.0, -0.0092, 0.4318, -0.8428035, 2.0], "edgeVertices": [0.1701, 0.382, 0.4506, 0.0, -0.1609, -0.8138, 0.4119, 0.0, -0.1609, -0.8138, 0.4119, 1.0, -0.0092, 0.4318, -0.8625, 1.0, -0.0092, 0.4318, -0.8625, 2.0, 0.1701, 0.382, 0.4506, 2.0], "spikes": [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0], "sceneGraph": {"neurons": [{"id": 0, "position": [0.1701, 0.382, 0.4506]}, {"id": 1, "position": [-0.1609, -0.8138, 0.4119]}, {"id": 2, "position": [-0.0092, 0.4318, -0.8625]}], "synapses": [{"from": 0, "to": 1, "weight": 0.6}, {"from": 1, "to": 2, "weight": 0.7}, {"from": 2, "to": 0, "weight": -0.5}]}};
 
   function matMul(a, b) {
     const out = new Float32Array(16);
@@ -86,7 +86,7 @@
     const ys = neurons.map((node) => node.position[1]);
     const zs = neurons.map((node) => node.position[2]);
     const span = Math.max((Math.max(...xs) - Math.min(...xs)) || 0, (Math.max(...ys) - Math.min(...ys)) || 0, (Math.max(...zs) - Math.min(...zs)) || 0, 1);
-    const arm = span * 0.08;
+    const arm = span * 0.015;
 
     const neuronVertices = [];
     for (const node of neurons) {
@@ -373,11 +373,11 @@
     window.addEventListener("resize", resize);
     resize();
 
-    let sceneGraph = payload.sceneGraph || null;
-    let geometry = sceneGraph ? buildGeometryFromScene(sceneGraph) : null;
-    let neuronVerts = geometry?.neuronVertices || new Float32Array(payload.neuronVertices || []);
-    let edgeVerts = geometry?.edgeVertices || new Float32Array(payload.edgeVertices || []);
-    let neuronCount = geometry?.neuronCount || payload.neuronCount || 0;
+    let sceneGraph = payload.sceneGraph;
+    let geometry = buildGeometryFromScene(sceneGraph);
+    let neuronVerts = geometry.neuronVertices;
+    let edgeVerts = geometry.edgeVertices;
+    let neuronCount = geometry.neuronCount;
     const stepCount = payload.stepCount;
     const localSpikes = new Uint32Array(payload.spikes);
     let liveInterpolated = new Float32Array(neuronCount);
@@ -402,16 +402,6 @@
     const simUniformBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const edgeUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const neuronUniformBuffer = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-
-    function writeSimUniform(stepValue, neuronCountValue, decayValue, boostValue) {
-      const simBytes = new ArrayBuffer(16);
-      const simView = new DataView(simBytes);
-      simView.setUint32(0, stepValue, true);
-      simView.setUint32(4, neuronCountValue, true);
-      simView.setFloat32(8, decayValue, true);
-      simView.setFloat32(12, boostValue, true);
-      device.queue.writeBuffer(simUniformBuffer, 0, simBytes);
-    }
 
     function writeSimUniform(stepValue, neuronCountValue, decayValue, boostValue) {
       const simBytes = new ArrayBuffer(16);
@@ -494,8 +484,13 @@
         var out: Out;
         let idx = u32(input.owner);
         let pulse = clamp(intensities[idx], 0.0, 1.0);
+        let glow = pulse * pulse;
+        let cool = draw.tint.xyz;
+        let warm = vec3<f32>(1.0, 0.76, 0.28);
+        let colorBase = mix(cool, warm, pulse);
+        let glowColor = warm * glow * 0.9;
         out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
-        out.color = vec4<f32>(draw.tint.xyz + vec3<f32>(pulse, pulse * 0.7, 0.0), draw.tint.w);
+        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + pulse * 0.35));
         return out;
       }
       @fragment
@@ -617,7 +612,7 @@
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(view, proj);
+      const mvp = matMul(proj, view);
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
 
@@ -635,7 +630,7 @@
       const encoder = device.createCommandEncoder();
 
       if (usingLiveSnapshots) {
-        const interpolated = interpolator.sample(ts);
+        const interpolated = interpolator.sample(now);
         if (interpolated) {
           for (let i = 0; i < liveInterpolated.length; i++) {
             liveInterpolated[i] = Math.max((liveInterpolated[i] || 0) * payload.decay, interpolated[i] || 0);
@@ -651,30 +646,21 @@
       }
 
       const textureView = ctx.getCurrentTexture().createView();
-
-      // 1. Write to uniform buffers BEFORE beginning the render pass
-      drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
-      device.queue.writeBuffer(edgeUniformBuffer, 0, drawData);
-
-      drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
-      device.queue.writeBuffer(neuronUniformBuffer, 0, drawData);
-
-      // 2. Begin the pass
       const pass = encoder.beginRenderPass({
         colorAttachments: [{ view: textureView, clearValue: {r:0.02,g:0.03,b:0.07,a:1}, loadOp: "clear", storeOp: "store" }],
       });
       pass.setPipeline(renderPipeline);
-
-      // 3. Draw Edges
+      drawData[16] = 0.1; drawData[17] = 0.45; drawData[18] = 0.9; drawData[19] = 0.8;
+      device.queue.writeBuffer(edgeUniformBuffer, 0, drawData);
       pass.setBindGroup(0, edgeDrawBG);
       pass.setVertexBuffer(0, edgeBuffer);
       pass.draw(edgeVerts.length / 4);
 
-      // 4. Draw Neurons
+      drawData[16] = 0.75; drawData[17] = 0.95; drawData[18] = 1.0; drawData[19] = 1.0;
+      device.queue.writeBuffer(neuronUniformBuffer, 0, drawData);
       pass.setBindGroup(0, neuronDrawBG);
       pass.setVertexBuffer(0, neuronBuffer);
       pass.draw(neuronVerts.length / 4);
-      
       pass.end();
 
       device.queue.submit([encoder.finish()]);
@@ -684,7 +670,7 @@
         spikesForBroadcast.push(localSpikes[step * neuronCount + i] || 0);
       }
       if (collab?.role === "host") {
-        collab.spikeChannel.broadcast({ time: ts, step, spikes: spikesForBroadcast });
+        collab.spikeChannel.broadcast({ time: now, step, spikes: spikesForBroadcast });
       }
 
       timeLabel.textContent = `step ${step + 1}/${stepCount} (dt=${payload.dt.toFixed(3)}s)`;

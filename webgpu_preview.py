@@ -421,16 +421,6 @@ HTML_TEMPLATE = """<!doctype html>
       device.queue.writeBuffer(simUniformBuffer, 0, simBytes);
     }
 
-    function writeSimUniform(stepValue, neuronCountValue, decayValue, boostValue) {
-      const simBytes = new ArrayBuffer(16);
-      const simView = new DataView(simBytes);
-      simView.setUint32(0, stepValue, true);
-      simView.setUint32(4, neuronCountValue, true);
-      simView.setFloat32(8, decayValue, true);
-      simView.setFloat32(12, boostValue, true);
-      device.queue.writeBuffer(simUniformBuffer, 0, simBytes);
-    }
-
     function rebuildSceneBuffers(nextGraph) {
       sceneGraph = nextGraph;
       geometry = buildGeometryFromScene(sceneGraph);
@@ -502,8 +492,13 @@ HTML_TEMPLATE = """<!doctype html>
         var out: Out;
         let idx = u32(input.owner);
         let pulse = clamp(intensities[idx], 0.0, 1.0);
+        let glow = pulse * pulse;
+        let cool = draw.tint.xyz;
+        let warm = vec3<f32>(1.0, 0.76, 0.28);
+        let colorBase = mix(cool, warm, pulse);
+        let glowColor = warm * glow * 0.9;
         out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
-        out.color = vec4<f32>(draw.tint.xyz + vec3<f32>(pulse, pulse * 0.7, 0.0), draw.tint.w);
+        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + pulse * 0.35));
         return out;
       }
       @fragment
@@ -736,9 +731,28 @@ def build_webgpu_payload(network, layout, history):
     spikes = []
     for step in history:
         frame = [0] * len(neuron_ids)
-        for neuron_id, fired in enumerate(step["spikes"]):
-            if fired and neuron_id in id_to_index:
-                frame[id_to_index[neuron_id]] = 1
+        spike_values = step.get("spikes", [])
+        if isinstance(spike_values, dict):
+            for neuron_id, fired in spike_values.items():
+                normalized_id = int(neuron_id)
+                if fired and normalized_id in id_to_index:
+                    frame[id_to_index[normalized_id]] = 1
+        else:
+            spike_list = list(spike_values)
+            is_dense_binary = (
+                len(spike_list) == len(neuron_ids)
+                and all(value in (0, 1, 0.0, 1.0, False, True) for value in spike_list)
+            )
+            if is_dense_binary:
+                for idx, fired in enumerate(spike_list):
+                    if fired:
+                        neuron_id = neuron_ids[idx]
+                        frame[id_to_index[neuron_id]] = 1
+            else:
+                for neuron_id in spike_list:
+                    normalized_id = int(neuron_id)
+                    if normalized_id in id_to_index:
+                        frame[id_to_index[normalized_id]] = 1
         spikes.extend(frame)
     if len(history) > 1 and "time" in history[0] and "time" in history[1]:
         dt = float(history[1]["time"] - history[0]["time"])
