@@ -1,5 +1,6 @@
 import json
 import argparse
+import math
 from pathlib import Path
 
 EXCITATORY_COLOR = "#2ecc71"
@@ -19,6 +20,39 @@ def go_module():
 def load_json(path: str):
     with open(path, "r") as f:
         return json.load(f)
+
+
+def ensure_positions(network, layout):
+    """Return a complete neuron-id -> [x, y, z] map.
+
+    Layout files can be stale (missing recently added neurons). Missing ids get
+    deterministic fallback coordinates on a unit circle so rendering never fails.
+    """
+    if isinstance(layout, dict):
+        pos = {
+            int(neuron_id): coords
+            for neuron_id, coords in layout.items()
+            if isinstance(coords, list) and len(coords) == 3
+        }
+    else:
+        pos = {
+            item["id"]: item["position"]
+            for item in layout
+            if "id" in item and isinstance(item.get("position"), list) and len(item["position"]) == 3
+        }
+
+    neuron_ids = [neuron["id"] for neuron in network.get("neurons", [])]
+    missing_ids = [nid for nid in neuron_ids if nid not in pos]
+    if not missing_ids:
+        return pos
+
+    start_index = len(pos)
+    total = max(len(neuron_ids), 1)
+    for offset, nid in enumerate(missing_ids):
+        angle = 2 * math.pi * ((start_index + offset) / total)
+        pos[nid] = [round(math.cos(angle), 4), round(math.sin(angle), 4), 0.0]
+
+    return pos
 
 
 def parse_args():
@@ -300,7 +334,7 @@ def main():
     args = parse_args()
     network = load_json(args.network)
     layout = load_json(args.layout)
-    pos = {item["id"]: item["position"] for item in layout}
+    pos = ensure_positions(network, layout)
 
     fig = build_figure(network, pos)
 
