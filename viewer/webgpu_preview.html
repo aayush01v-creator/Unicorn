@@ -485,11 +485,12 @@
         let idx = u32(input.owner);
         let pulse = clamp(intensities[idx], 0.0, 1.0);
         let glow = pulse * pulse;
-        let accent = vec3<f32>(1.0, 0.72, 0.3);
-        let colorBase = draw.tint.xyz + vec3<f32>(pulse, pulse * 0.7, 0.0);
-        let glowColor = accent * glow * 0.6;
+        let cool = draw.tint.xyz;
+        let warm = vec3<f32>(1.0, 0.76, 0.28);
+        let colorBase = mix(cool, warm, pulse);
+        let glowColor = warm * glow * 0.9;
         out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
-        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + glow * 0.25));
+        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + pulse * 0.35));
         return out;
       }
       @fragment
@@ -611,7 +612,7 @@
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(view, proj);
+      const mvp = matMul(proj, view);
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
 

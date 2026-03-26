@@ -493,11 +493,12 @@ HTML_TEMPLATE = """<!doctype html>
         let idx = u32(input.owner);
         let pulse = clamp(intensities[idx], 0.0, 1.0);
         let glow = pulse * pulse;
-        let accent = vec3<f32>(1.0, 0.72, 0.3);
-        let colorBase = draw.tint.xyz + vec3<f32>(pulse, pulse * 0.7, 0.0);
-        let glowColor = accent * glow * 0.6;
+        let cool = draw.tint.xyz;
+        let warm = vec3<f32>(1.0, 0.76, 0.28);
+        let colorBase = mix(cool, warm, pulse);
+        let glowColor = warm * glow * 0.9;
         out.pos = draw.mvp * vec4<f32>(input.pos, 1.0);
-        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + glow * 0.25));
+        out.color = vec4<f32>(colorBase + glowColor, min(1.0, draw.tint.w + pulse * 0.35));
         return out;
       }
       @fragment
@@ -737,11 +738,21 @@ def build_webgpu_payload(network, layout, history):
                 if fired and normalized_id in id_to_index:
                     frame[id_to_index[normalized_id]] = 1
         else:
-            for idx, fired in enumerate(spike_values):
-                if not fired or idx >= len(neuron_ids):
-                    continue
-                neuron_id = neuron_ids[idx]
-                frame[id_to_index[neuron_id]] = 1
+            spike_list = list(spike_values)
+            is_dense_binary = (
+                len(spike_list) == len(neuron_ids)
+                and all(value in (0, 1, 0.0, 1.0, False, True) for value in spike_list)
+            )
+            if is_dense_binary:
+                for idx, fired in enumerate(spike_list):
+                    if fired:
+                        neuron_id = neuron_ids[idx]
+                        frame[id_to_index[neuron_id]] = 1
+            else:
+                for neuron_id in spike_list:
+                    normalized_id = int(neuron_id)
+                    if normalized_id in id_to_index:
+                        frame[id_to_index[normalized_id]] = 1
         spikes.extend(frame)
     if len(history) > 1 and "time" in history[0] and "time" in history[1]:
         dt = float(history[1]["time"] - history[0]["time"])
