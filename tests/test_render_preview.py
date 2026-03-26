@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from render_preview import build_edge_geometry, build_figure, compute_node_metrics
+from render_preview import build_edge_geometry, build_figure, compute_node_metrics, ensure_positions
 
 
 class RenderPreviewTests(unittest.TestCase):
@@ -68,6 +68,20 @@ class RenderPreviewTests(unittest.TestCase):
         self.assertIn("Neurons: 2 | Synapses: 1", fig.layout.annotations[0]["text"])
         self.assertEqual(list(fig.data[-1].marker["size"]), [14, 14])
         self.assertEqual(list(fig.data[-1].marker["color"]), [0.9, 0.1])
+
+    def test_ensure_positions_fills_missing_ids(self):
+        network = {"neurons": [{"id": 0}, {"id": 1}, {"id": 2}]}
+        stale_layout = [
+            {"id": 0, "position": [0.0, 0.0, 0.0]},
+            {"id": 1, "position": [1.0, 0.0, 0.0]},
+        ]
+
+        pos = ensure_positions(network, stale_layout)
+
+        self.assertEqual(pos[0], [0.0, 0.0, 0.0])
+        self.assertEqual(pos[1], [1.0, 0.0, 0.0])
+        self.assertIn(2, pos)
+        self.assertEqual(len(pos[2]), 3)
 
 
 if __name__ == "__main__":

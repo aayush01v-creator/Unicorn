@@ -4,6 +4,7 @@ from pathlib import Path
 
 from backend.data_loader.json_loader import load_network
 from backend.neuron_sim.framework_runner import run_simulation
+from render_preview import ensure_positions
 
 
 SPIKE_COLOR = "#f1c40f"
@@ -155,6 +156,12 @@ def parse_args():
     parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
     parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON file")
     parser.add_argument("--output", default="viewer/spike_animation.html", help="Animation HTML output path")
+    parser.add_argument(
+        "--spikes",
+        dest="spikes",
+        default=None,
+        help="Optional path to an existing spike history JSON (alias for skipping simulation rerun)",
+    )
     parser.add_argument("--history-output", default="samples/spike_history.json", help="Spike history JSON output path")
     return parser.parse_args()
 
@@ -167,9 +174,12 @@ def main():
     network = load_network(args.network)
     layout = load_json(args.layout)
 
-    history = run_simulation(network)
+    if args.spikes:
+        history = load_json(args.spikes)
+    else:
+        history = run_simulation(network)
 
-    pos = {item["id"]: item["position"] for item in layout}
+    pos = ensure_positions(network, layout)
 
     xs, ys, zs, labels = [], [], [], []
     for neuron in network["neurons"]:
