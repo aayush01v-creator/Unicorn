@@ -64,7 +64,7 @@ def parse_args():
 
 
 def synapse_style(weight: float):
-    kind = "excitatory" if weight >= 0 else "inhibitory"
+    kind = "positive" if weight >= 0 else "negative"
     color = EXCITATORY_COLOR if weight >= 0 else INHIBITORY_COLOR
     return kind, color
 
@@ -147,7 +147,7 @@ def build_edge_geometry(network, pos):
         mid_z.append(midpoint[2])
         weights.append(weight)
         weight_text.append(
-            f"{kind.title()} synapse<br>{syn['from']} → {syn['to']}<br>weight={weight:+.2f}"
+            f"{kind.title()} direct interaction<br>{syn['from']} → {syn['to']}<br>weight={weight:+.2f}"
         )
 
         arrow_anchor = [start[i] + (direction[i] * 0.78) for i in range(3)]
@@ -196,13 +196,13 @@ def build_figure(network, pos):
         xs.append(x)
         ys.append(y)
         zs.append(z)
-        labels.append(f"Neuron {nid}")
+        labels.append(f"Random Variable {nid}")
         node_sizes.append(5 + (2 * total_degree))
         node_colors.append(neuron.get("input_current", network.get("input_current", [0.0] * len(network["neurons"]))[nid] if nid < len(network.get("input_current", [])) else 0.0))
         node_hover.append(
             "<br>".join(
                 [
-                    f"Neuron {nid}",
+                    f"Random Variable {nid}",
                     f"threshold={neuron.get('threshold', 1.0):.2f}",
                     f"tau={neuron.get('membrane_time_constant', 'default')}",
                     f"refractory={neuron.get('refractory_period', network.get('refractory_period', 'default'))}",
@@ -227,7 +227,7 @@ def build_figure(network, pos):
             color="#b8c2cc",
         ),
         hoverinfo="none",
-        name="Synapses",
+        name="Direct Interactions",
     )
 
     weight_trace = go.Scatter3d(
@@ -279,12 +279,12 @@ def build_figure(network, pos):
         ),
         hovertemplate="%{customdata}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
         customdata=node_hover,
-        name="Neurons",
+        name="Random Variables",
     )
 
     fig = go.Figure(data=[edge_trace, weight_trace, arrow_trace, node_trace])
     fig.update_layout(
-        title="Unicorn 3D Neural Network Preview",
+        title="Graph Describing Model Structure",
         scene=dict(
             xaxis_title="X",
             yaxis_title="Y",
@@ -299,15 +299,31 @@ def build_figure(network, pos):
         annotations=[
             dict(
                 x=0.01,
-                y=1.08,
+                y=1.12,
                 xref="paper",
                 yref="paper",
                 showarrow=False,
                 align="left",
                 text=(
-                    f"Neurons: {summary['neurons']} | Synapses: {summary['synapses']} | "
-                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}<br>"
-                    f"<span style='font-size: 11px; color: #a0a0a0'>Green: Excitatory | Red: Inhibitory | Size: Degree | Color: Input Current</span>"
+                    f"<span style='font-size: 12px; color: #b0b0b0'>"
+                    f"Structured probabilistic models use graphs (in the graph theory sense of 'nodes' or 'vertices' connected by edges)<br>"
+                    f"to represent interactions between random variables. Each node represents a random variable.<br>"
+                    f"Each edge represents a direct interaction. These direct interactions imply other, indirect interactions,<br>"
+                    f"but only the direct interactions need to be explicitly modeled. There is more than one way to describe the interaction."
+                    f"</span>"
+                ),
+            ),
+            dict(
+                x=0.01,
+                y=1.01,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                align="left",
+                text=(
+                    f"Random Variables: {summary['neurons']} | Interactions: {summary['synapses']} | "
+                    f"Positive: {summary['excitatory']} | Negative: {summary['inhibitory']}<br>"
+                    f"<span style='font-size: 11px; color: #a0a0a0'>Green: Positive | Red: Negative | Size: Degree | Color: Input Current</span>"
                 ),
                 font=dict(size=13),
             )
