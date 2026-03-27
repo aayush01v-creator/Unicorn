@@ -1,321 +1,39 @@
-Unicorn is an early-stage cross-platform neural network visualization project focused on three ideas:
-
-- simulate simple spiking neural networks
-- generate automatic 3D layouts using force-directed placement
-- preview the network in an interactive 3D browser view
-
-Right now, the repo is a working prototype with a minimal backend, a simple force-layout engine, and Plotly-based 3D previews for both static inspection and spike animation.
-
-
-## Near-Term Roadmap
-
-The current priority order is:
-
-1. strengthen the simulation layer
-2. improve visualization and playback quality
-3. add collaboration features only after those foundations stabilize
-
-A shared collaboration layer is intentionally deferred for now so we do not lock in sync behavior around a prototype whose data model and UI are still changing quickly.
-
-## Current Features
-
-- standardized network loading from Unicorn JSON, SONATA-style JSON, and NeuroML (`.nml`/`.xml`)
-- leaky integrate-and-fire simulation with membrane decay, refractory periods, and configurable timesteps
-- optional framework-backed simulation selection (`simple`, `snntorch`, `spikingjelly`, or `auto`)
-- 3D force-directed layout generation
-- interactive 3D HTML preview with synapse direction arrows
-- synapse weight labels plus color intensity mapped to edge strength
-- excitatory vs inhibitory synapse coloring for easier circuit inspection
-- animated spike playback in the browser
-- WebGPU preview now includes an optional collaboration mode with CRDT structural sync (Yjs) and WebRTC spike snapshot streaming/interpolation
-- sample network and generated layout output
-- Termux-friendly development workflow
-
-## Project Structure
-
-```text
-Unicorn/
-├── backend/
-│   ├── data_loader/
-│   │   └── json_loader.py
-│   └── neuron_sim/
-│       ├── framework_runner.py
-│       ├── simple_snn.py
-│       └── torch_snn.py
-├── physics_engine/
-│   └── force_layout/
-│       └── simple_layout.py
-├── samples/
-│   ├── network.json
-│   ├── layout_output.json
-│   └── spike_history.json
-├── viewer/
-│   ├── network_preview.html
-│   └── spike_animation.html
-├── layout_demo.py
-├── main.py
-├── render_preview.py
-├── animate_preview.py
-└── README.md
-```
-
-## What It Does
-
-1. **Simulation**
-
-   `main.py` loads a network file (Unicorn JSON, SONATA-style JSON, or NeuroML) and runs a lightweight leaky integrate-and-fire simulation with timestep-scaled membrane decay and refractory handling.
-
-2. **Layout**
-
-   `layout_demo.py` computes 3D neuron positions using a physics-driven force-directed layout: each neuron carries a repulsive charge (Coulomb-style), and each synapse behaves like a spring (Hooke-style).
-
-3. **Preview**
-
-   `render_preview.py` generates a static interactive 3D HTML visualization, while `animate_preview.py` generates a time-based spike playback view.
-
-## Reading the 3D Preview
-
-The browser preview now exposes the main connectivity cues directly in 3D:
-
-- **Arrow direction:** each synapse renders with a cone marker near the target neuron so you can see signal flow at a glance.
-- **Weight labels:** every synapse midpoint shows a signed numeric label such as `+0.70` or `-0.40`.
-- **Weight intensity:** stronger weights appear with more saturated edge coloring.
-- **Excitatory vs inhibitory colors:** positive weights render in the green side of the diverging scale, while negative weights render in the red side.
-- **Animated spikes:** neurons still pulse in the animation so you can correlate structure with activity over time.
-
-## Simulation Configuration
-
-Each neuron can override a few lightweight LIF parameters in `samples/network.json` or any other network config:
-
-- `threshold`: firing threshold for that neuron
-- `membrane_time_constant`: controls how quickly the membrane voltage decays back toward rest
-- `refractory_period`: amount of simulated time the neuron stays reset after a spike
-- `reset_potential`: optional post-spike reset voltage
-- `initial_voltage`: optional starting membrane voltage
-
-Global simulation settings include:
-
-- `dt`: simulation timestep used for integration and refractory countdowns
-- `steps`: number of simulation steps to run
-- `input_current`: constant external drive per neuron
-
-## Standardized Data Formats
-
-The loader in `backend/data_loader/json_loader.py` now normalizes multiple data formats into Unicorn's internal schema:
-
-- **Unicorn JSON**: existing native format (`neurons`, `synapses`, `steps`, `dt`, etc.)
-- **SONATA-style JSON**: uses `nodes` + `edges` sections with identifiers such as `node_id`, `source_node_id`, and `target_node_id`
-- **NeuroML**: parses `.nml` / `.xml` networks with `<population>` and `<projection>/<connection>` elements
-
-Try the sample files directly:
-
-```bash
-python main.py samples/network.sonata.json
-python main.py samples/network.nml
-python layout_demo.py samples/network.sonata.json --output samples/layout_output.json
-python animate_preview.py samples/network.nml --layout samples/layout_output.json
-```
-
-
-
-## Framework-Backed Simulation
-
-Unicorn now supports selecting a simulation backend via `simulator` in your network JSON:
-
-- `"simple"`: existing pure-Python reference simulator
-- `"snntorch"`: requires `snntorch` (and `torch`)
-- `"spikingjelly"`: requires `spikingjelly` (and `torch`)
-- `"auto"` (default): tries `snntorch`, then `spikingjelly`, then falls back to `simple`
-
-Example:
-
-```json
-{
-  "simulator": "snntorch",
-  "dt": 0.5,
-  "steps": 20
-}
-```
-
-If the chosen framework is not installed, Unicorn raises an import error so missing dependencies are explicit.
-
-### Optional framework installs
-
-Install one of the framework backends if you want tensor-accelerated simulation:
-
-```bash
-# snnTorch backend
-pip install torch snntorch
-
-# SpikingJelly backend
-pip install torch spikingjelly
-```
-
-> Note: both framework modes currently run Unicorn's LIF update loop through the Torch-backed simulator while validating that your selected framework package is installed.
-
-
-### Layout Physics Tuning
-
-You can optionally tune the force simulation in your network JSON under `layout`:
-
-- `k_repulsion`: neuron-to-neuron charge repulsion strength
-- `k_spring`: synapse spring constant
-- `rest_length`: target synapse length in 3D space
-- `dt`: integration timestep for the layout solver
-- `damping`: velocity damping factor to stabilize motion
-- `max_step`: velocity cap per step to prevent explosive motion
-
-Example:
-
-```json
-{
-  "layout": {
-    "k_repulsion": 0.06,
-    "k_spring": 0.09,
-    "rest_length": 1.1,
-    "dt": 0.05,
-    "damping": 0.85,
-    "max_step": 0.15
-  }
-}
-```
-
-
-
-## Real-Time Collaboration Preview (Experimental)
-
-The generated WebGPU preview can run in a shared collaboration session:
-
-- **Structural sync (CRDT):** scene graph (neurons, positions, synapses, weights) is mirrored through **Yjs** over `y-webrtc`.
-- **Live spike sync (WebRTC snapshots):** the host broadcasts lightweight spike snapshots over direct WebRTC data channels; peers interpolate snapshots client-side for smooth pulse motion.
-
-Run and open the same output file on multiple machines, then use the same `session` query parameter:
-
-```bash
-python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output output/webgpu_preview.html
-```
-
-Host URL example:
-
-```
-output/webgpu_preview.html?session=lab-demo&role=host
-```
-
-Peer URL example:
-
-```
-output/webgpu_preview.html?session=lab-demo&role=peer
-```
-
-## Android (Termux) Setup
-
-For a full end-to-end Android Termux walkthrough (install, dependencies, run commands, previews, and troubleshooting), see:
-
-- `docs/setup.md`
-
-## Native Engine Integration (Planned)
-
-For production mobile/desktop clients, Unicorn is planning a native headless physics integration for force-equilibrium solving:
-
-- Rust + Rapier or C++ + Jolt as the compute engine
-- Flutter FFI and React Native JSI bindings for direct UI integration
-- background worker execution so equilibrium solving never blocks the main UI thread
-- a shared C ABI to keep Android, iOS, Windows, and Linux support aligned
-
-See `docs/architecture.md` for the detailed integration plan and ABI/threading model.
-
-## High-Scale Rendering Roadmap (Planned)
-
-For inspection and small-to-medium demos, the current browser preview is sufficient. For massive workloads (thousands of neurons, millions of spikes), Unicorn's architecture now targets a **WebGPU-first** renderer path with compute-shader-driven spike effects and reduced CPU overhead, while retaining WebGL/Plotly compatibility fallbacks.
-
-See `docs/architecture.md` for the proposed GPU pipeline, capability tiers, and migration stages.
-
-## CLI Network Builder
-
-If editing raw JSON by hand gets tedious, use `network_builder.py` to create or update network files directly from the terminal. It works with `samples/network.json` by default, but you can point it at any other path first in the command.
-
-```bash
-python network_builder.py samples/network.json summary
-python network_builder.py samples/network.json add-neuron 3 --threshold 1.1 --membrane-time-constant 5.0 --input-current 0.4
-python network_builder.py samples/network.json add-synapse 2 3 0.8
-python network_builder.py samples/network.json set-config --steps 20 --dt 0.25
-python network_builder.py samples/network.json validate
-```
-
-Supported commands:
-
-- `init`: create a fresh network JSON file
-- `add-neuron`: add a neuron and optionally seed its input current
-- `add-synapse`: add or replace a connection
-- `set-input`: update per-neuron external current
-- `set-config`: update global simulation settings
-- `summary` / `validate`: inspect the resulting network
-
-## Tutorial: Generate and Inspect the Browser Preview
-
-### 1. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Review or edit the sample network
-
-Open `samples/network.json` and define neurons plus synapses. Use positive weights for excitatory connections and negative weights for inhibitory ones. For example:
-
-```json
-{
-  "from": 2,
-  "to": 0,
-  "weight": -0.5
-}
-```
-
-That single negative weight is enough to make the preview render the edge in the inhibitory color range.
-
-### 3. Generate a layout
-
-```bash
-python layout_demo.py
-```
-
-This produces `samples/layout_output.json`, which stores the 3D coordinates used by the preview renderers.
-
-### 4. Build the static 3D preview
-
-```bash
-python render_preview.py
-```
-
-Open `output/network_preview.html` in a browser and inspect:
-
-- cones showing synapse direction
-- signed text labels at synapse midpoints
-- diverging edge colors indicating inhibitory vs excitatory strength
-
-### 5. Build the animated spike preview
-
-```bash
-python animate_preview.py
-```
-
-Open `output/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
-
-### 6. Build the WebGPU prototype preview (high-scale path)
-
-```bash
-python webgpu_preview.py --layout samples/layout_output.json --history samples/spike_history.json
-```
-
-This generates `output/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
-
-### 7. Iterate on readability
-
-A practical workflow is:
-
-1. edit `samples/network.json`
-2. rerun `python layout_demo.py`
-3. rerun `python render_preview.py`, `python animate_preview.py`, and/or `python webgpu_preview.py`
-4. refresh the browser tab
-
-If your preview looks too dense, reduce the number of edges temporarily or scale the network into smaller subcircuits before rendering.
+# Unicorn: Structured Probabilistic Model Visualizer
+
+Unicorn is a cross-platform tool that visualizes and simulates structured probabilistic models as interactive graphs. It connects random variables (nodes) with direct interactions (edges), integrating underlying dynamics like time-stepped decays into readable 3D structures.
+
+## At a Glance
+
+- **Standardized Loading**: Imports from Unicorn JSON, SONATA-style, and NeuroML natively.
+- **Physics Layout**: Force-directed placement computes responsive 3D topologies.
+- **Model Inspection**: Clear static graphs or animated state-playbacks in any WebGL/WebGPU browser.
+- **Flexible Backends**: Ships with a pure-Python simulator, and automatically scales to `snntorch` or `spikingjelly` if available.
+- **CLI Utility**: Rapidly edit configuration, nodes, and weights via command-line helpers.
+
+## Reading the Graph
+
+- **Nodes vs Edges**: Nodes represent random variables, and edges represent their direct interactions.
+- **Color Coding**: Positive interactions are rendered in Green, reflecting excitatory flow; Negative interactions in Red. High intensity edges saturate in color.
+- **Interactive Telemetry**: Hovering provides localized variable metrics, degrees, thresholds, and current input loads.
+
+## Quickstart
+
+1. **Install dependencies:**  
+   ```bash
+   python -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+2. **Simulate Dynamics & Layout:**  
+   ```bash
+   python main.py samples/network.json
+   python layout_demo.py samples/network.json --output samples/layout_output.json
+   ```
+3. **Generate Static & Animated Previews:**  
+   ```bash
+   python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
+   python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
+   ```
+
+Open the resulting `output/*.html` files in any modern browser to inspect the model. 
+
+For full setup notes (including Android/Termux environments), see `docs/setup.md`.
