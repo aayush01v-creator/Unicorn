@@ -33,7 +33,7 @@ def load_json(path: str):
 def build_node_trace(xs, ys, zs, labels, spikes, time_value):
     go = go_module()
     colors = [SPIKE_COLOR if s == 1 else IDLE_COLOR for s in spikes]
-    sizes = [15 if s == 1 else 9 for s in spikes]
+    sizes = [10 if s == 1 else 6 for s in spikes]
     hover_text = [
         f"{label}<br>time={time_value:.2f}<br>spike={'yes' if spike else 'no'}"
         for label, spike in zip(labels, spikes)
@@ -42,9 +42,7 @@ def build_node_trace(xs, ys, zs, labels, spikes, time_value):
         x=xs,
         y=ys,
         z=zs,
-        mode="markers+text",
-        text=labels,
-        textposition="top center",
+        mode="markers",
         marker=dict(size=sizes, color=colors, line=dict(width=1, color="#ffffff")),
         hovertemplate="%{customdata}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
         customdata=hover_text,
@@ -105,9 +103,7 @@ def build_active_path_trace(active_synapses, pos, current_spikes, time_value):
         x=midpoint_x,
         y=midpoint_y,
         z=midpoint_z,
-        mode="markers+text",
-        text=["active" for _ in active_synapses],
-        textposition="bottom center",
+        mode="markers",
         marker=dict(size=6, color=ACTIVE_PATH_COLOR, opacity=0.95),
         hovertemplate="%{customdata}<extra></extra>",
         customdata=text,
@@ -155,7 +151,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate spike animation from network/layout files.")
     parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
     parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON file")
-    parser.add_argument("--output", default="viewer/spike_animation.html", help="Animation HTML output path")
+    parser.add_argument("--output", default="output/spike_animation.html", help="Animation HTML output path")
     parser.add_argument(
         "--spikes",
         dest="spikes",
@@ -213,11 +209,9 @@ def main():
         x=geometry["mid_x"],
         y=geometry["mid_y"],
         z=geometry["mid_z"],
-        mode="markers+text",
-        text=[f"{weight:+.2f}" for weight in geometry["weights"]],
-        textposition="top center",
+        mode="markers",
         marker=dict(
-            size=4,
+            size=3,
             color=geometry["weights"],
             colorscale="RdBu",
             cmin=-geometry["max_abs_weight"],
@@ -275,18 +269,19 @@ def main():
             yaxis_title="Y",
             zaxis_title="Z",
             aspectmode="data",
-            annotations=[
-                dict(
-                    showarrow=False,
-                    x=0,
-                    y=0,
-                    z=0,
-                    text="Edges: green excitatory / red inhibitory, bright paths show currently active synapses, rings show recent spike trails",
-                    xshift=10,
-                    font=dict(size=12),
-                )
-            ],
         ),
+        annotations=[
+            dict(
+                x=0.01,
+                y=-0.1,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                align="left",
+                text="<span style='font-size: 11px; color: #a0a0a0'>Edges: green excitatory / red inhibitory | Bright paths: active synapses | Rings: recent trails</span>",
+                font=dict(size=13),
+            )
+        ],
         margin=dict(l=0, r=0, b=0, t=60),
         updatemenus=[
             {

@@ -54,9 +54,12 @@ HTML_TEMPLATE = """<!doctype html>
 
   function matMul(a, b) {
     const out = new Float32Array(16);
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
-      out[r * 4 + c] = 0;
-      for (let k = 0; k < 4; k++) out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
+    for (let c = 0; c < 4; c++) {
+      for (let r = 0; r < 4; r++) {
+        let sum = 0;
+        for (let k = 0; k < 4; k++) sum += a[k * 4 + r] * b[c * 4 + k];
+        out[c * 4 + r] = sum;
+      }
     }
     return out;
   }
@@ -803,7 +806,7 @@ def parse_args():
     )
     parser.add_argument(
         "--output",
-        default="viewer/webgpu_preview.html",
+        default="output/webgpu_preview.html",
         help="Output HTML path",
     )
     return parser.parse_args()

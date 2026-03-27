@@ -135,7 +135,7 @@ Expected output artifact:
 ## 11) Generate static HTML preview
 
 ```bash
-python render_preview.py samples/network.json --layout samples/layout_output.json --output viewer/network_preview.html
+python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
 ```
 
 ---
@@ -143,7 +143,7 @@ python render_preview.py samples/network.json --layout samples/layout_output.jso
 ## 12) Generate animated spike preview
 
 ```bash
-python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output viewer/spike_animation.html
+python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
 ```
 
 ---
@@ -156,8 +156,8 @@ You have two easy options.
 
 Use Android file manager to open:
 
-- `viewer/network_preview.html`
-- `viewer/spike_animation.html`
+- `output/network_preview.html`
+- `output/spike_animation.html`
 
 ### Option B: Serve locally from Termux (more reliable)
 
@@ -214,8 +214,8 @@ From repo root:
 source .venv/bin/activate
 python main.py samples/network.json
 python layout_demo.py samples/network.json --output samples/layout_output.json
-python render_preview.py samples/network.json --layout samples/layout_output.json --output viewer/network_preview.html
-python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output viewer/spike_animation.html
+python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
+python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
 ```
 
 ---

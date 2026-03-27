@@ -59,7 +59,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate static 3D network preview HTML.")
     parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to network JSON")
     parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON")
-    parser.add_argument("--output", default="viewer/network_preview.html", help="Output HTML path")
+    parser.add_argument("--output", default="output/network_preview.html", help="Output HTML path")
     return parser.parse_args()
 
 
@@ -197,7 +197,7 @@ def build_figure(network, pos):
         ys.append(y)
         zs.append(z)
         labels.append(f"Neuron {nid}")
-        node_sizes.append(10 + (4 * total_degree))
+        node_sizes.append(5 + (2 * total_degree))
         node_colors.append(neuron.get("input_current", network.get("input_current", [0.0] * len(network["neurons"]))[nid] if nid < len(network.get("input_current", [])) else 0.0))
         node_hover.append(
             "<br>".join(
@@ -234,11 +234,9 @@ def build_figure(network, pos):
         x=geometry["mid_x"],
         y=geometry["mid_y"],
         z=geometry["mid_z"],
-        mode="markers+text",
-        text=[f"{weight:+.2f}" for weight in geometry["weights"]],
-        textposition="top center",
+        mode="markers",
         marker=dict(
-            size=4,
+            size=3,
             color=geometry["weights"],
             colorscale=WEIGHT_COLORSCALE,
             cmin=-geometry["max_abs_weight"],
@@ -270,9 +268,7 @@ def build_figure(network, pos):
         x=xs,
         y=ys,
         z=zs,
-        mode="markers+text",
-        text=labels,
-        textposition="top center",
+        mode="markers",
         marker=dict(
             size=node_sizes,
             color=node_colors,
@@ -295,17 +291,6 @@ def build_figure(network, pos):
             zaxis_title="Z",
             aspectmode="data",
             camera=dict(eye=CAMERA_EYE),
-            annotations=[
-                dict(
-                    showarrow=False,
-                    x=0,
-                    y=0,
-                    z=0,
-                    text="Green = excitatory, red = inhibitory, node size tracks degree, node color tracks input current.",
-                    xshift=10,
-                    font=dict(size=12),
-                )
-            ],
         ),
         legend=dict(x=0.01, y=0.99),
         margin=dict(l=0, r=0, b=0, t=70),
@@ -321,7 +306,8 @@ def build_figure(network, pos):
                 align="left",
                 text=(
                     f"Neurons: {summary['neurons']} | Synapses: {summary['synapses']} | "
-                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}"
+                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}<br>"
+                    f"<span style='font-size: 11px; color: #a0a0a0'>Green: Excitatory | Red: Inhibitory | Size: Degree | Color: Input Current</span>"
                 ),
                 font=dict(size=13),
             )

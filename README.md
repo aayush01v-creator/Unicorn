@@ -192,19 +192,19 @@ The generated WebGPU preview can run in a shared collaboration session:
 Run and open the same output file on multiple machines, then use the same `session` query parameter:
 
 ```bash
-python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output viewer/webgpu_preview.html
+python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output output/webgpu_preview.html
 ```
 
 Host URL example:
 
 ```
-viewer/webgpu_preview.html?session=lab-demo&role=host
+output/webgpu_preview.html?session=lab-demo&role=host
 ```
 
 Peer URL example:
 
 ```
-viewer/webgpu_preview.html?session=lab-demo&role=peer
+output/webgpu_preview.html?session=lab-demo&role=peer
 ```
 
 ## Android (Termux) Setup
@@ -287,7 +287,7 @@ This produces `samples/layout_output.json`, which stores the 3D coordinates used
 python render_preview.py
 ```
 
-Open `viewer/network_preview.html` in a browser and inspect:
+Open `output/network_preview.html` in a browser and inspect:
 
 - cones showing synapse direction
 - signed text labels at synapse midpoints
@@ -299,7 +299,7 @@ Open `viewer/network_preview.html` in a browser and inspect:
 python animate_preview.py
 ```
 
-Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
+Open `output/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
 
 ### 6. Build the WebGPU prototype preview (high-scale path)
 
@@ -307,7 +307,7 @@ Open `viewer/spike_animation.html` to replay spikes with the same connectivity o
 python webgpu_preview.py --layout samples/layout_output.json --history samples/spike_history.json
 ```
 
-This generates `viewer/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
+This generates `output/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
 
 ### 7. Iterate on readability
 
