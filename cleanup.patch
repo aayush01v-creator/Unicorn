@@ -1,0 +1,300 @@
+diff --git a/.gitignore b/.gitignore
+index 4afe23b..c5a2e40 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -6,3 +6,4 @@ build/
+ dist/
+ target/
+ .DS_Store
++output/
+diff --git a/README.md b/README.md
+index a52c4f7..eab9fbd 100644
+--- a/README.md
++++ b/README.md
+@@ -192,19 +192,19 @@ The generated WebGPU preview can run in a shared collaboration session:
+ Run and open the same output file on multiple machines, then use the same `session` query parameter:
+ 
+ ```bash
+-python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output viewer/webgpu_preview.html
++python webgpu_preview.py samples/network.json --layout samples/layout_output.json --output output/webgpu_preview.html
+ ```
+ 
+ Host URL example:
+ 
+ ```
+-viewer/webgpu_preview.html?session=lab-demo&role=host
++output/webgpu_preview.html?session=lab-demo&role=host
+ ```
+ 
+ Peer URL example:
+ 
+ ```
+-viewer/webgpu_preview.html?session=lab-demo&role=peer
++output/webgpu_preview.html?session=lab-demo&role=peer
+ ```
+ 
+ ## Android (Termux) Setup
+@@ -287,7 +287,7 @@ This produces `samples/layout_output.json`, which stores the 3D coordinates used
+ python render_preview.py
+ ```
+ 
+-Open `viewer/network_preview.html` in a browser and inspect:
++Open `output/network_preview.html` in a browser and inspect:
+ 
+ - cones showing synapse direction
+ - signed text labels at synapse midpoints
+@@ -299,7 +299,7 @@ Open `viewer/network_preview.html` in a browser and inspect:
+ python animate_preview.py
+ ```
+ 
+-Open `viewer/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
++Open `output/spike_animation.html` to replay spikes with the same connectivity overlays preserved. The animation now includes recent-spike trail rings, per-step timestamps in the slider and title, multiple play-speed buttons, and active-path highlighting for synapses driven by the current spikes. The script also writes `samples/spike_history.json` so you can inspect the simulation output separately.
+ 
+ ### 6. Build the WebGPU prototype preview (high-scale path)
+ 
+@@ -307,7 +307,7 @@ Open `viewer/spike_animation.html` to replay spikes with the same connectivity o
+ python webgpu_preview.py --layout samples/layout_output.json --history samples/spike_history.json
+ ```
+ 
+-This generates `viewer/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
++This generates `output/webgpu_preview.html`, a WebGPU renderer prototype that keeps spike pulse intensity updates in a compute pass and renders synapses/neurons directly from GPU buffers.
+ 
+ ### 7. Iterate on readability
+ 
+diff --git a/animate_preview.py b/animate_preview.py
+index e584aa3..847b614 100644
+--- a/animate_preview.py
++++ b/animate_preview.py
+@@ -33,7 +33,7 @@ def load_json(path: str):
+ def build_node_trace(xs, ys, zs, labels, spikes, time_value):
+     go = go_module()
+     colors = [SPIKE_COLOR if s == 1 else IDLE_COLOR for s in spikes]
+-    sizes = [15 if s == 1 else 9 for s in spikes]
++    sizes = [10 if s == 1 else 6 for s in spikes]
+     hover_text = [
+         f"{label}<br>time={time_value:.2f}<br>spike={'yes' if spike else 'no'}"
+         for label, spike in zip(labels, spikes)
+@@ -42,9 +42,7 @@ def build_node_trace(xs, ys, zs, labels, spikes, time_value):
+         x=xs,
+         y=ys,
+         z=zs,
+-        mode="markers+text",
+-        text=labels,
+-        textposition="top center",
++        mode="markers",
+         marker=dict(size=sizes, color=colors, line=dict(width=1, color="#ffffff")),
+         hovertemplate="%{customdata}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>",
+         customdata=hover_text,
+@@ -105,9 +103,7 @@ def build_active_path_trace(active_synapses, pos, current_spikes, time_value):
+         x=midpoint_x,
+         y=midpoint_y,
+         z=midpoint_z,
+-        mode="markers+text",
+-        text=["active" for _ in active_synapses],
+-        textposition="bottom center",
++        mode="markers",
+         marker=dict(size=6, color=ACTIVE_PATH_COLOR, opacity=0.95),
+         hovertemplate="%{customdata}<extra></extra>",
+         customdata=text,
+@@ -155,7 +151,7 @@ def parse_args():
+     parser = argparse.ArgumentParser(description="Generate spike animation from network/layout files.")
+     parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
+     parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON file")
+-    parser.add_argument("--output", default="viewer/spike_animation.html", help="Animation HTML output path")
++    parser.add_argument("--output", default="output/spike_animation.html", help="Animation HTML output path")
+     parser.add_argument(
+         "--spikes",
+         dest="spikes",
+@@ -213,11 +209,9 @@ def main():
+         x=geometry["mid_x"],
+         y=geometry["mid_y"],
+         z=geometry["mid_z"],
+-        mode="markers+text",
+-        text=[f"{weight:+.2f}" for weight in geometry["weights"]],
+-        textposition="top center",
++        mode="markers",
+         marker=dict(
+-            size=4,
++            size=3,
+             color=geometry["weights"],
+             colorscale="RdBu",
+             cmin=-geometry["max_abs_weight"],
+@@ -275,18 +269,19 @@ def main():
+             yaxis_title="Y",
+             zaxis_title="Z",
+             aspectmode="data",
+-            annotations=[
+-                dict(
+-                    showarrow=False,
+-                    x=0,
+-                    y=0,
+-                    z=0,
+-                    text="Edges: green excitatory / red inhibitory, bright paths show currently active synapses, rings show recent spike trails",
+-                    xshift=10,
+-                    font=dict(size=12),
+-                )
+-            ],
+         ),
++        annotations=[
++            dict(
++                x=0.01,
++                y=-0.1,
++                xref="paper",
++                yref="paper",
++                showarrow=False,
++                align="left",
++                text="<span style='font-size: 11px; color: #a0a0a0'>Edges: green excitatory / red inhibitory | Bright paths: active synapses | Rings: recent trails</span>",
++                font=dict(size=13),
++            )
++        ],
+         margin=dict(l=0, r=0, b=0, t=60),
+         updatemenus=[
+             {
+diff --git a/docs/setup.md b/docs/setup.md
+index e577d24..28dfa6c 100644
+--- a/docs/setup.md
++++ b/docs/setup.md
+@@ -135,7 +135,7 @@ Expected output artifact:
+ ## 11) Generate static HTML preview
+ 
+ ```bash
+-python render_preview.py samples/network.json --layout samples/layout_output.json --output viewer/network_preview.html
++python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
+ ```
+ 
+ ---
+@@ -143,7 +143,7 @@ python render_preview.py samples/network.json --layout samples/layout_output.jso
+ ## 12) Generate animated spike preview
+ 
+ ```bash
+-python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output viewer/spike_animation.html
++python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
+ ```
+ 
+ ---
+@@ -156,8 +156,8 @@ You have two easy options.
+ 
+ Use Android file manager to open:
+ 
+-- `viewer/network_preview.html`
+-- `viewer/spike_animation.html`
++- `output/network_preview.html`
++- `output/spike_animation.html`
+ 
+ ### Option B: Serve locally from Termux (more reliable)
+ 
+@@ -214,8 +214,8 @@ From repo root:
+ source .venv/bin/activate
+ python main.py samples/network.json
+ python layout_demo.py samples/network.json --output samples/layout_output.json
+-python render_preview.py samples/network.json --layout samples/layout_output.json --output viewer/network_preview.html
+-python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output viewer/spike_animation.html
++python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
++python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
+ ```
+ 
+ ---
+diff --git a/render_preview.py b/render_preview.py
+index 27c442e..a13bc5b 100644
+--- a/render_preview.py
++++ b/render_preview.py
+@@ -59,7 +59,7 @@ def parse_args():
+     parser = argparse.ArgumentParser(description="Generate static 3D network preview HTML.")
+     parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to network JSON")
+     parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON")
+-    parser.add_argument("--output", default="viewer/network_preview.html", help="Output HTML path")
++    parser.add_argument("--output", default="output/network_preview.html", help="Output HTML path")
+     return parser.parse_args()
+ 
+ 
+@@ -197,7 +197,7 @@ def build_figure(network, pos):
+         ys.append(y)
+         zs.append(z)
+         labels.append(f"Neuron {nid}")
+-        node_sizes.append(10 + (4 * total_degree))
++        node_sizes.append(5 + (2 * total_degree))
+         node_colors.append(neuron.get("input_current", network.get("input_current", [0.0] * len(network["neurons"]))[nid] if nid < len(network.get("input_current", [])) else 0.0))
+         node_hover.append(
+             "<br>".join(
+@@ -234,11 +234,9 @@ def build_figure(network, pos):
+         x=geometry["mid_x"],
+         y=geometry["mid_y"],
+         z=geometry["mid_z"],
+-        mode="markers+text",
+-        text=[f"{weight:+.2f}" for weight in geometry["weights"]],
+-        textposition="top center",
++        mode="markers",
+         marker=dict(
+-            size=4,
++            size=3,
+             color=geometry["weights"],
+             colorscale=WEIGHT_COLORSCALE,
+             cmin=-geometry["max_abs_weight"],
+@@ -270,9 +268,7 @@ def build_figure(network, pos):
+         x=xs,
+         y=ys,
+         z=zs,
+-        mode="markers+text",
+-        text=labels,
+-        textposition="top center",
++        mode="markers",
+         marker=dict(
+             size=node_sizes,
+             color=node_colors,
+@@ -295,17 +291,6 @@ def build_figure(network, pos):
+             zaxis_title="Z",
+             aspectmode="data",
+             camera=dict(eye=CAMERA_EYE),
+-            annotations=[
+-                dict(
+-                    showarrow=False,
+-                    x=0,
+-                    y=0,
+-                    z=0,
+-                    text="Green = excitatory, red = inhibitory, node size tracks degree, node color tracks input current.",
+-                    xshift=10,
+-                    font=dict(size=12),
+-                )
+-            ],
+         ),
+         legend=dict(x=0.01, y=0.99),
+         margin=dict(l=0, r=0, b=0, t=70),
+@@ -321,7 +306,8 @@ def build_figure(network, pos):
+                 align="left",
+                 text=(
+                     f"Neurons: {summary['neurons']} | Synapses: {summary['synapses']} | "
+-                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}"
++                    f"Excitatory: {summary['excitatory']} | Inhibitory: {summary['inhibitory']}<br>"
++                    f"<span style='font-size: 11px; color: #a0a0a0'>Green: Excitatory | Red: Inhibitory | Size: Degree | Color: Input Current</span>"
+                 ),
+                 font=dict(size=13),
+             )
+diff --git a/webgpu_preview.py b/webgpu_preview.py
+index 27344e8..d89d9eb 100644
+--- a/webgpu_preview.py
++++ b/webgpu_preview.py
+@@ -54,9 +54,12 @@ HTML_TEMPLATE = """<!doctype html>
+ 
+   function matMul(a, b) {
+     const out = new Float32Array(16);
+-    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+-      out[r * 4 + c] = 0;
+-      for (let k = 0; k < 4; k++) out[r * 4 + c] += a[r * 4 + k] * b[k * 4 + c];
++    for (let c = 0; c < 4; c++) {
++      for (let r = 0; r < 4; r++) {
++        let sum = 0;
++        for (let k = 0; k < 4; k++) sum += a[k * 4 + r] * b[c * 4 + k];
++        out[c * 4 + r] = sum;
++      }
+     }
+     return out;
+   }
+@@ -803,7 +806,7 @@ def parse_args():
+     )
+     parser.add_argument(
+         "--output",
+-        default="viewer/webgpu_preview.html",
++        default="output/webgpu_preview.html",
+         help="Output HTML path",
+     )
+     return parser.parse_args()
