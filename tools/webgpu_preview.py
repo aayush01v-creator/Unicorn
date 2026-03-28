@@ -679,7 +679,7 @@ HTML_TEMPLATE = """<!doctype html>
       const ez = Math.sin(yaw)*Math.cos(pitch)*radius;
       const proj= perspective(Math.PI/3, canvas.width/Math.max(1,canvas.height), 0.1, 2000);
       const view= lookAt([ex,ey,ez],[0,0,0],[0,1,0]);
-      const mvp = transpose(matMul(view,proj));
+      const mvp = transpose(matMul(proj,view));
 
       // Draw uniform: mvp (16f) + tint (4f) + time (1f) + pad (3f) = 80 bytes
       const drawData = new Float32Array(20);
