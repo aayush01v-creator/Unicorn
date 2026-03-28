@@ -1,5 +1,10 @@
 # Unicorn: Structured Probabilistic Model Visualizer
 
+> 📱 **Android App available!** NeuroGen is a real-time 3D neural network simulator for Android built from this project.
+> Download from [`releases/`](releases/) · Full documentation: [`ANDROID.md`](ANDROID.md)
+
+---
+
 Unicorn is a cross-platform tool that visualizes and simulates structured probabilistic models as
 interactive graphs. It connects random variables (nodes) with direct interactions (edges),
 integrating underlying dynamics like time-stepped decays into readable 3D structures.
