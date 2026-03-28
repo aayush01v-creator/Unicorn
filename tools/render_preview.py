@@ -141,7 +141,7 @@ def build_edge_geometry(network, pos):
         max(abs(syn.get("weight", 0.0)) for syn in network["synapses"]) or 1.0
     )
 
-    edge_x, edge_y, edge_z = [], [], []
+    edge_x, edge_y, edge_z, edge_colors = [], [], [], []
     mid_x, mid_y, mid_z, weights, weight_text = [], [], [], [], []
     arrow_x, arrow_y, arrow_z = [], [], []
     arrow_u, arrow_v, arrow_w, arrow_colors = [], [], [], []
@@ -158,6 +158,8 @@ def build_edge_geometry(network, pos):
         edge_x += [start[0], end[0], None]
         edge_y += [start[1], end[1], None]
         edge_z += [start[2], end[2], None]
+        # repeat weight for the two endpoints + None so plotly picks it up
+        edge_colors += [weight, weight, None]
         line_widths.append(3 + (3 * normalized_weight))
 
         midpoint = [(start[i] + end[i]) / 2 for i in range(3)]
@@ -182,6 +184,7 @@ def build_edge_geometry(network, pos):
         "edge_x": edge_x,
         "edge_y": edge_y,
         "edge_z": edge_z,
+        "edge_colors": edge_colors,
         "mid_x": mid_x,
         "mid_y": mid_y,
         "mid_z": mid_z,

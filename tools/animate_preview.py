@@ -52,11 +52,7 @@ def build_node_trace(xs, ys, zs, labels, spikes, time_value):
 
 def build_trail_trace(xs, ys, zs, labels, intensities, time_value):
     go = go_module()
-    sizes = [10 + (18 * intensity) for intensity in intensities]
-    opacities = [
-        round(0.15 + (0.55 * intensity), 3) if intensity > 0 else 0.0
-        for intensity in intensities
-    ]
+    sizes = [6 + (16 * intensity) for intensity in intensities]
     hover_text = [
         f"{label}<br>time={time_value:.2f}<br>recent-spike-intensity={intensity:.2f}"
         for label, intensity in zip(labels, intensities)
@@ -67,7 +63,10 @@ def build_trail_trace(xs, ys, zs, labels, intensities, time_value):
         z=zs,
         mode="markers",
         marker=dict(
-            size=sizes, color=TRAIL_COLOR, opacity=opacities, symbol="circle-open"
+            size=sizes,
+            color=TRAIL_COLOR,
+            opacity=0.45,
+            symbol="circle-open",
         ),
         hovertemplate="%{customdata}<extra></extra>",
         customdata=hover_text,
@@ -199,7 +198,7 @@ def parse_args():
 def main():
     args = parse_args()
     go = go_module()
-    from render_preview import build_edge_geometry
+    from tools.render_preview import build_edge_geometry
 
     network = load_network(args.network)
     layout = load_json(args.layout)
@@ -227,14 +226,7 @@ def main():
         y=geometry["edge_y"],
         z=geometry["edge_z"],
         mode="lines",
-        line=dict(
-            width=5,
-            color=geometry["edge_colors"],
-            colorscale="RdBu",
-            cmin=-geometry["max_abs_weight"],
-            cmax=geometry["max_abs_weight"],
-            colorbar=dict(title="Weight", len=0.7),
-        ),
+        line=dict(width=5, color="#b8c2cc"),
         hoverinfo="none",
         name="Synapses",
     )
