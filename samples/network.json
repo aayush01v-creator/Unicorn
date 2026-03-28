@@ -1,0 +1,47 @@
+{
+  "neurons": [
+    {
+      "id": 0,
+      "threshold": 1.0,
+      "membrane_time_constant": 4.0,
+      "refractory_period": 1.0
+    },
+    {
+      "id": 1,
+      "threshold": 1.0,
+      "membrane_time_constant": 6.0,
+      "refractory_period": 1.0
+    },
+    {
+      "id": 2,
+      "threshold": 1.0,
+      "membrane_time_constant": 5.0,
+      "refractory_period": 2.0
+    }
+  ],
+  "synapses": [
+    {
+      "from": 0,
+      "to": 1,
+      "weight": 0.6
+    },
+    {
+      "from": 1,
+      "to": 2,
+      "weight": 0.7
+    },
+    {
+      "from": 2,
+      "to": 0,
+      "weight": -0.5
+    }
+  ],
+  "input_current": [
+    1.2,
+    0.0,
+    0.0
+  ],
+  "steps": 10,
+  "dt": 0.5,
+  "refractory_period": 1.0
+}

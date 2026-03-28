@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<neuroml xmlns="http://www.neuroml.org/schema/neuroml2" id="unicorn_sample">
+  <network id="sampleNet">
+    <population id="neurons" component="iafCell" size="3">
+      <instance id="0"/>
+      <instance id="1"/>
+      <instance id="2"/>
+    </population>
+    <projection id="proj_0" presynapticPopulation="neurons" postsynapticPopulation="neurons">
+      <connection id="0" preCellId="../neurons/0" postCellId="../neurons/1" weight="0.6"/>
+      <connection id="1" preCellId="../neurons/1" postCellId="../neurons/2" weight="0.7"/>
+      <connection id="2" preCellId="../neurons/2" postCellId="../neurons/0" weight="-0.5"/>
+    </projection>
+  </network>
+</neuroml>
