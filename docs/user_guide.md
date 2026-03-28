@@ -1,21 +1,20 @@
 # Unicorn User Guide
 
-This guide covers everything you need to build networks, run simulations, and generate visualizations with Unicorn.
+Complete reference for building networks, altering neuron properties, running simulations, computing layouts, and generating visualizations.
 
 ---
 
 ## Table of Contents
 
 1. [Building Networks](#1-building-networks)
-   - [generate — one-command network creation](#generate--one-command-network-creation)
-   - [init --from-config — recipe-driven setup](#init---from-config--recipe-driven-setup)
-   - [Incremental editing](#incremental-editing-add-neuron-add-synapse)
-2. [Running Simulations](#2-running-simulations)
-3. [Computing Layouts](#3-computing-layouts)
-4. [Generating Visualizations](#4-generating-visualizations)
-5. [Viewing Output](#5-viewing-output)
-6. [CLI Reference](#6-cli-reference)
-7. [Config Recipe Reference](#7-config-recipe-reference)
+2. [Altering Neuron Properties](#2-altering-neuron-properties)
+3. [Running Simulations](#3-running-simulations)
+4. [Computing Layouts](#4-computing-layouts)
+5. [Generating Visualizations](#5-generating-visualizations)
+6. [Batch Mutation Recipes](#6-batch-mutation-recipes)
+7. [CLI Reference](#7-cli-reference)
+8. [Config Recipe Reference](#8-config-recipe-reference)
+9. [Neuron Property Reference](#9-neuron-property-reference)
 
 ---
 
@@ -27,13 +26,13 @@ All network builder commands share this structure:
 python -m tools.network_builder <path> <subcommand> [options]
 ```
 
-`<path>` is the target network JSON file. It defaults to `samples/network.json`.
+`<path>` is the target network JSON file (default: `samples/network.json`).
 
 ---
 
 ### `generate` — one-command network creation
 
-Create a complete N-neuron network with shared property defaults, auto-wired topology, and optional per-neuron exceptions — all in a single call.
+Create a complete N-neuron network with shared property defaults, auto-wired topology, and optional per-neuron exceptions.
 
 ```bash
 python -m tools.network_builder <path> generate <count> [options] [--force]
@@ -42,256 +41,481 @@ python -m tools.network_builder <path> generate <count> [options] [--force]
 **Examples:**
 
 ```bash
-# 10-neuron ring, everything at defaults
-python -m tools.network_builder samples/my.json generate 10 --topology ring --force
-
-# 6-neuron random network, 40% density, reproducible seed
-python -m tools.network_builder samples/my.json generate 6 \
-  --topology random --density 0.4 --seed 42 --weight 0.6 --force
-
-# 5-neuron chain with mixed neuron properties
-python -m tools.network_builder samples/my.json generate 5 \
-  --topology chain \
-  --tau 8 --threshold 1.0 --input-current 0.1 \
-  --steps 30 --dt 0.5 --global-refractory 1.0 \
-  --neuron-overrides "0:input_current=1.5,threshold=0.8" "3:tau=4,refractory_period=2.0" \
+# 46-neuron random network, 9% density, reproducible seed, 40 steps
+python -m tools.network_builder samples/net.json generate 46 \
+  --topology random --density 0.09 --seed 13 \
+  --tau 9 --threshold 1.0 --input-current 0.1 \
+  --steps 40 --dt 0.5 --global-refractory 1.0 \
+  --neuron-overrides \
+    "0:input_current=1.8,threshold=0.7" \
+    "7:input_current=1.4,tau=5" \
+    "45:input_current=1.7,tau=6" \
   --force
 ```
-
-**All options:**
 
 | Flag | Default | Description |
 |---|---|---|
 | `count` | *(required)* | Number of neurons, assigned ids 0…N-1 |
 | `--threshold` | `1.0` | Firing threshold (shared default) |
-| `--tau` | `10.0` | Membrane time constant τ (shared default) |
+| `--tau` | `10.0` | Membrane time constant τ |
 | `--input-current` | `0.0` | Input drive for every neuron |
 | `--refractory-period` | `None` | Per-neuron refractory period |
 | `--reset-potential` | `None` | Membrane reset value after spike |
-| `--neuron-overrides` | — | Per-neuron exceptions (see format below) |
-| `--topology` | `none` | Auto-wire preset (see topologies below) |
+| `--neuron-overrides` | — | Per-neuron exceptions (see below) |
+| `--topology` | `none` | `none` · `chain` · `ring` · `all-to-all` · `random` |
 | `--weight` | `0.5` | Synapse weight for topology presets |
 | `--density` | `0.3` | Edge probability for `random` topology |
-| `--seed` | `None` | RNG seed for `random` (reproducible) |
+| `--seed` | `None` | RNG seed for `random` |
 | `--steps` | `10` | Simulation steps |
 | `--dt` | `1.0` | Time-step size |
 | `--global-refractory` | `0.0` | Simulation-level refractory period |
 | `--force` | — | Overwrite existing file |
 
-**Per-neuron override format:**
-
-```
-"<id>:key=val,key=val,..."
-```
-
-Multiple neurons are space-separated (one quoted token per neuron):
+**Neuron override format:** `"<id>:key=val,key=val"` (space-separate multiple entries)
 
 ```bash
---neuron-overrides "0:threshold=0.9,input_current=1.2" "2:tau=5" "4:refractory_period=2"
+--neuron-overrides \
+  "0:input_current=1.8,threshold=0.7" \
+  "7:tau=5,refractory_period=2.0"
 ```
-
-Supported keys: `threshold`, `tau` (alias for `membrane_time_constant`), `membrane_time_constant`, `refractory_period`, `reset_potential`, `input_current`.
-
-**Topology presets:**
-
-| Value | Wiring |
-|---|---|
-| `none` | No synapses — add them manually |
-| `chain` | 0→1→2→…→N-1 |
-| `ring` | Chain + N-1→0 closing the loop |
-| `all-to-all` | Every ordered pair (no self-loops) |
-| `random` | Each edge independently included with probability `--density` |
 
 ---
 
-### `init --from-config` — recipe-driven setup
-
-Seed an entire network from a compact JSON config file. This is the fastest way to version-control reusable topologies.
+### `init` — minimal fresh network
 
 ```bash
-python -m tools.network_builder <path> init --from-config <config.json> [--force]
+python -m tools.network_builder <path> init [--steps N] [--dt F] [--refractory-period F] [--force]
+python -m tools.network_builder <path> init --from-config samples/network_config.json --force
 ```
-
-**Example:**
-
-```bash
-python -m tools.network_builder samples/my.json init \
-  --from-config samples/network_config.json --force
-```
-
-See [Config Recipe Reference](#7-config-recipe-reference) for all supported fields, and [`samples/network_config.json`](../samples/network_config.json) for a ready-to-use example.
 
 ---
 
-### Incremental editing (`add-neuron`, `add-synapse`, …)
-
-Fine-tune an existing network without regenerating it from scratch:
+### Incremental editing
 
 ```bash
 # Add a neuron
-python -m tools.network_builder samples/my.json add-neuron 5 \
-  --threshold 0.9 --membrane-time-constant 6 --input-current 0.5
+python -m tools.network_builder net.json add-neuron 5 \
+  --threshold 0.9 --membrane-time-constant 8.0 --input-current 0.5
 
 # Add a synapse
-python -m tools.network_builder samples/my.json add-synapse 0 5 0.7
+python -m tools.network_builder net.json add-synapse 0 5 0.8
 
-# Update an existing synapse weight
-python -m tools.network_builder samples/my.json add-synapse 0 5 -0.3 --replace
-
-# Change input current for neuron 2
-python -m tools.network_builder samples/my.json set-input 2 1.0
+# Set global input current for one neuron
+python -m tools.network_builder net.json set-input 3 1.2
 
 # Update simulation settings
-python -m tools.network_builder samples/my.json set-config --steps 50 --dt 0.25
-
-# Verify integrity
-python -m tools.network_builder samples/my.json validate
-
-# Human-readable summary
-python -m tools.network_builder samples/my.json summary
+python -m tools.network_builder net.json set-config --steps 50 --dt 0.5
 ```
 
 ---
 
-## 2. Running Simulations
+## 2. Altering Neuron Properties
+
+### `set-neuron` — patch any property on one neuron
 
 ```bash
-python main.py <network.json>
+python -m tools.network_builder <path> set-neuron <id> [options]
 ```
 
-`main.py` loads the network and runs a simulation using the best available backend:
+| Flag | Property altered |
+|---|---|
+| `--threshold F` | Firing threshold |
+| `--tau F` | Membrane time constant |
+| `--refractory-period F` | Refractory period |
+| `--reset-potential F` | Membrane reset value |
+| `--v-rest F` | Resting potential (membrane leaks toward this) |
+| `--input-current F` | Constant external drive |
+| `--bias F` | Additive bias current (independent of synapses) |
+| `--gain F` | Scales all incoming synaptic current |
+| `--noise-std F` | Gaussian noise std injected each step |
+| `--dropout F` | Per-step probability of silencing this neuron |
+| `--adaptation-rate F` | Threshold rise per spike |
+| `--adaptation-decay F` | Per-step decay of adaptation state |
+| `--activation lif\|relu\|softplus\|tanh\|sigmoid\|rbf` | Neuron model type |
+| `--rbf-centre F` | RBF centre voltage |
+| `--rbf-sigma F` | RBF Gaussian width |
 
-- **Simple (default):** pure-Python leaky integrate-and-fire.
-- **snnTorch:** used automatically if installed.
-- **SpikingJelly:** used automatically if installed.
+**Examples:**
 
-Simulation output (spike trains, voltages per step) is printed to stdout and also written to `samples/spike_history.json` for later use in animations.
+```bash
+# Make neuron 5 a sigmoid probabilistic unit with noise and dropout
+python -m tools.network_builder net.json set-neuron 5 \
+  --activation sigmoid --noise-std 0.05 --dropout 0.25
+
+# Configure neuron 12 as a RBF unit
+python -m tools.network_builder net.json set-neuron 12 \
+  --activation rbf --rbf-centre 0.5 --rbf-sigma 0.2 --gain 1.5
+
+# Add spike-frequency adaptation to neuron 3
+python -m tools.network_builder net.json set-neuron 3 \
+  --adaptation-rate 0.4 --adaptation-decay 0.85 --refractory-period 2.0
+
+# Neuron 0: elevated drive with v_rest baseline
+python -m tools.network_builder net.json set-neuron 0 \
+  --input-current 1.8 --v-rest 0.2 --bias 0.05
+```
 
 ---
 
-## 3. Computing Layouts
-
-The layout solver computes 3D node positions using force-directed equilibrium:
+### `mutate` — bulk property changes across a neuron slice
 
 ```bash
-python -m tools.layout_demo <network.json> --output <layout.json>
+python -m tools.network_builder <path> mutate \
+  --select <selector> \
+  [--set   "key=val,..."] \
+  [--add   "key=delta,..."] \
+  [--scale "key=factor,..."]
 ```
 
-The output JSON maps neuron ids to `[x, y, z]` coordinates and is consumed by all preview generators.
+**Selectors:**
+
+| Selector | Meaning |
+|---|---|
+| `all` | Every neuron |
+| `range:0-9` | Neurons 0 through 9 (inclusive) |
+| `every:3` | Every 3rd neuron (0, 3, 6, …) |
+| `0,5,12` | Specific ids |
+
+**Examples:**
+
+```bash
+# Double gain on all neurons
+python -m tools.network_builder net.json mutate --select all --scale gain=2.0
+
+# Drop threshold by 0.1 on neurons 0-9
+python -m tools.network_builder net.json mutate \
+  --select range:0-9 --add threshold=-0.1
+
+# Set noise+dropout on every 3rd neuron
+python -m tools.network_builder net.json mutate \
+  --select every:3 --set noise_std=0.05,dropout_prob=0.1
+
+# Push more drive to a specific subgroup
+python -m tools.network_builder net.json mutate \
+  --select 0,7,15,22 --add input_current=0.5
+```
 
 ---
 
-## 4. Generating Visualizations
-
-### Static 3D Preview
+### `apply-profile` — named property presets
 
 ```bash
-python -m tools.render_preview <network.json> \
-  --layout <layout.json> \
-  --output output/network_preview.html
+python -m tools.network_builder <path> apply-profile <profile> --to <selector>
+python -m tools.network_builder <path> apply-profile --from-file profiles.json --name my_type --to all
 ```
 
-Produces an interactive Plotly 3D scene showing nodes (sized by degree, colored by input current) and directional synapse cones.
+**Built-in profiles:**
 
-### Animated Spike Playback
+| Profile | Properties applied |
+|---|---|
+| `inhibitory` | `gain=-1`, `threshold=0.8`, `tau=5` |
+| `driver` | `input_current=1.5`, `threshold=0.7`, `noise_std=0.02` |
+| `adaptive` | `adaptation_rate=0.3`, `adaptation_decay=0.9`, `refractory_period=2.0` |
+| `stochastic` | `dropout_prob=0.25`, `noise_std=0.05`, `activation_fn=sigmoid` |
+| `silent` | `input_current=0`, `dropout_prob=1.0` |
+
+**Custom profiles** (`profiles.json`):
+```json
+{
+  "excitatory_relay": {
+    "gain": 1.5, "threshold": 0.85, "noise_std": 0.01
+  }
+}
+```
+
+```bash
+python -m tools.network_builder net.json apply-profile --from-file profiles.json \
+  --name excitatory_relay --to range:10-20
+```
+
+---
+
+### `set-schedule` — time-varying input current
+
+Attach a dynamic drive schedule to a neuron. Overrides its `input_current` each step.
+
+```bash
+python -m tools.network_builder <path> set-schedule <id> \
+  --mode <constant|ramp|pulse|sine> \
+  [--amplitude F] [--period F] [--offset F] [--duration F]
+```
+
+| Mode | Behaviour |
+|---|---|
+| `constant` | Fixed value `amplitude + offset` |
+| `sine` | `amplitude * sin(2π * t / period) + offset` |
+| `pulse` | Square wave: high for first half of each period |
+| `ramp` | Linear ramp from 0 to `amplitude` over `duration` steps |
+
+**Examples:**
+
+```bash
+# Sine wave: neuron 0 with amplitude 1.2, period 12 steps
+python -m tools.network_builder net.json set-schedule 0 \
+  --mode sine --amplitude 1.2 --period 12
+
+# Ramp: neuron 3 ramps up over 20 steps then holds
+python -m tools.network_builder net.json set-schedule 3 \
+  --mode ramp --amplitude 2.0 --duration 20
+
+# Pulse: neuron 7 alternates every 5 steps
+python -m tools.network_builder net.json set-schedule 7 \
+  --mode pulse --amplitude 1.5 --period 10
+```
+
+---
+
+### `props` — inspect neuron properties
+
+```bash
+python -m tools.network_builder <path> props [id ...]
+```
+
+```bash
+# Show all neurons
+python -m tools.network_builder net.json props
+
+# Show specific neurons
+python -m tools.network_builder net.json props 0 5 12
+```
+
+Output example:
+```
+Neuron   0  input_current=+1.8000
+  threshold=0.7000  membrane_time_constant=9.0000
+  bias=0.0500  v_rest=0.2000  activation_fn=lif
+  input_schedule={'mode': 'sine', 'amplitude': 1.2, 'period': 12.0, ...}
+
+Neuron   5  input_current=+0.0000
+  threshold=1.0000  activation_fn=sigmoid
+  noise_std=0.0500  dropout_prob=0.2500
+```
+
+---
+
+## 3. Running Simulations
 
 ```bash
 python -m tools.animate_preview <network.json> \
   --layout <layout.json> \
-  --spikes <spike_history.json> \
-  --output output/spike_animation.html
+  --output output/animation.html \
+  --history-output samples/spike_history.json
 ```
 
-Produces a frame-by-frame animation with speed controls, active-path highlighting, and recent-spike trail rings.
+The simulator (`SimpleSNN`) reads all neuron properties automatically — no extra flags needed.
 
-### WebGPU High-Performance Renderer
+---
+
+## 4. Computing Layouts
+
+```bash
+python -m tools.layout_demo <network.json> [--output <layout.json>]
+```
+
+Uses a chunked, vectorised force-directed algorithm. Layout positions are stored in 3-D space.
+
+---
+
+## 5. Generating Visualizations
+
+### Static 3D preview (Plotly)
+
+```bash
+python -m tools.render_preview <network.json> \
+  --layout <layout.json> --output output/preview.html
+```
+
+### Animated spike playback (Plotly)
+
+```bash
+python -m tools.animate_preview <network.json> \
+  --layout <layout.json> --output output/animation.html
+```
+
+### WebGPU real-time renderer
 
 ```bash
 python -m tools.webgpu_preview <network.json> \
   --layout <layout.json> \
   --history <spike_history.json> \
-  --output output/webgpu_preview.html
+  --output output/preview_webgpu.html
 ```
 
-Generates a GPU-accelerated renderer using WebGPU compute shaders — much faster for large networks (thousands of neurons).
+**Requires:** Chrome 113+, Edge 113+, or any WebGPU-capable browser.
+
+#### WebGPU Visualizer Features
+
+| Feature | Description |
+|---|---|
+| **Per-type colouring** | Each activation function type renders in a distinct colour (see legend) |
+| **Spike glow** | Neurons flash warm amber on firing, then decay |
+| **Noise shimmer** | Neurons with `noise_std > 0` show a subtle brightness oscillation |
+| **Adaptation dimming** | High `adaptation_rate` dims the neuron's base colour |
+| **Dropout desaturation** | Neurons with `dropout_prob > 0` become grey-tinted |
+| **Gain-scaled size** | Larger crosshairs = higher `gain` |
+| **Mouse-drag orbit** | Left-drag to rotate the 3D network |
+| **Scroll zoom** | Mouse wheel to zoom in/out |
+| **Type legend** | HUD shows neuron types present and their modifiers |
+| **Speed control** | ½× · 1× · 2× · 4× simulation playback |
+
+**Activation type colour legend:**
+
+| Type | Colour |
+|---|---|
+| `lif` | 🔵 Cool blue |
+| `relu` | 🟢 Green |
+| `softplus` | 🩵 Cyan |
+| `tanh` | 🟣 Purple |
+| `sigmoid` | 🟠 Orange |
+| `rbf` | 🟡 Yellow |
 
 ---
 
-## 5. Viewing Output
+## 6. Batch Mutation Recipes
 
-Open `viewer/index.html` in any modern browser to navigate all generated previews, or open the HTML files directly:
-
-```
-output/network_preview.html    — static 3D inspection
-output/spike_animation.html    — animated spike playback
-output/webgpu_preview.html     — WebGPU high-performance view
-```
-
-For mobile/Termux, serve locally:
+Apply sequences of mutations from a YAML or JSON recipe file:
 
 ```bash
-cd output && python -m http.server 8000
-# then open http://127.0.0.1:8000 in your browser
+python -m tools.mutate_network recipe.yaml
+```
+
+**Recipe format (YAML):**
+
+```yaml
+network: samples/network_46.json
+output:  samples/network_46_evolved.json
+steps:
+  # Make neurons 10-20 probabilistic stochastic units
+  - apply-profile:
+      name: stochastic
+      to: "range:10-20"
+
+  # Globally amplify all synaptic input
+  - mutate:
+      select: all
+      scale:
+        gain: 1.5
+
+  # Add sinewave drive to the main input neuron
+  - set-schedule:
+      id: 0
+      mode: sine
+      amplitude: 1.5
+      period: 12
+
+  # Fine-tune one specific neuron
+  - set-neuron:
+      id: 22
+      activation_fn: rbf
+      rbf_centre: 0.6
+      rbf_sigma: 0.15
+      adaptation_rate: 0.2
 ```
 
 ---
 
-## 6. CLI Reference
+## 7. CLI Reference
 
 ### `network_builder` subcommands
 
-| Subcommand | Positional args | Key options |
-|---|---|---|
-| `generate` | `count` | `--topology`, `--tau`, `--threshold`, `--input-current`, `--neuron-overrides`, `--weight`, `--density`, `--seed`, `--steps`, `--dt`, `--force` |
-| `init` | — | `--steps`, `--dt`, `--refractory-period`, `--from-config`, `--force` |
-| `add-neuron` | `id` | `--threshold`, `--membrane-time-constant`, `--refractory-period`, `--reset-potential`, `--initial-voltage`, `--input-current` |
-| `add-synapse` | `source target weight` | `--replace` |
-| `set-input` | `id current` | — |
-| `set-config` | — | `--steps`, `--dt`, `--refractory-period` |
-| `summary` | — | — |
-| `validate` | — | — |
+| Subcommand | Purpose |
+|---|---|
+| `init` | Create a fresh network file |
+| `generate` | Build an N-neuron network in one step |
+| `add-neuron` | Append a neuron |
+| `add-synapse` | Append a synapse |
+| `set-input` | Set input current for one neuron |
+| `set-config` | Update global simulation settings |
+| `set-neuron` | Patch any property on an existing neuron |
+| `mutate` | Bulk property change across a neuron selector |
+| `apply-profile` | Apply a built-in or custom property preset |
+| `set-schedule` | Attach a time-varying input schedule |
+| `props` | Print all properties of selected neurons |
+| `summary` | Print a concise network summary |
+| `validate` | Validate neuron/synapse references and numeric ranges |
+
+### Other tools
+
+| Tool | Command |
+|---|---|
+| Animated preview | `python -m tools.animate_preview` |
+| Static render | `python -m tools.render_preview` |
+| WebGPU preview | `python -m tools.webgpu_preview` |
+| Layout solver | `python -m tools.layout_demo` |
+| Batch mutate | `python -m tools.mutate_network <recipe.yaml>` |
 
 ---
 
-## 7. Config Recipe Reference
+## 8. Config Recipe Reference
 
-A config recipe is a JSON file that fully describes a network:
+`init --from-config` bootstraps a network from a JSON recipe:
 
-```jsonc
+```json
 {
-  // ── Required ───────────────────────────────────────────────────────
-  "count": 6,              // Number of neurons (ids 0…N-1)
-
-  // ── Simulation settings ────────────────────────────────────────────
-  "steps": 20,             // Simulation time steps
-  "dt": 0.5,               // Time-step size
-  "global_refractory": 1.0,// Simulation-level refractory period
-
-  // ── Shared neuron defaults (apply to every neuron) ─────────────────
-  "threshold": 1.0,        // Firing threshold
-  "tau": 8.0,              // Membrane time constant τ
-  "input_current": 0.0,    // Input drive
-  // "reset_potential": -0.1, (optional)
-
-  // ── Topology preset ────────────────────────────────────────────────
-  "topology": "ring",      // none | chain | ring | all-to-all | random
-  "weight": 0.6,           // Synapse weight for preset edges
-  "density": 0.3,          // (random only) edge probability
-  "seed": 42,              // (random only) RNG seed
-
-  // ── Per-neuron exceptions ───────────────────────────────────────────
-  "neuron_overrides": [
-    { "id": 0, "input_current": 1.5, "threshold": 0.8 },
-    { "id": 3, "tau": 4.0, "refractory_period": 2.0 },
-    { "id": 5, "input_current": 0.9, "threshold": 1.2 }
-  ],
-
-  // ── Explicit extra synapses (stacked on top of preset) ─────────────
-  "synapses": [
-    { "from": 0, "to": 3, "weight": -0.4 },
-    { "from": 5, "to": 1, "weight": 0.3 }
-  ]
+  "count": 10,
+  "topology": "random",
+  "density": 0.25,
+  "seed": 42,
+  "weight": 0.5,
+  "threshold": 1.0,
+  "membrane_time_constant": 10.0,
+  "refractory_period": 1.0,
+  "input_current": 0.3,
+  "steps": 30,
+  "dt": 0.5
 }
 ```
 
-All fields except `count` are optional. Missing fields fall back to their defaults.
+---
+
+## 9. Neuron Property Reference
+
+Every neuron object in the JSON supports these fields. All are optional (sensible defaults apply).
+
+### Core LIF properties
+
+| Field | Default | Description |
+|---|---|---|
+| `threshold` | `1.0` | Membrane voltage threshold for firing |
+| `membrane_time_constant` | `10.0` | τ in ms — how fast voltage decays |
+| `refractory_period` | `0.0` | Silence enforced after each spike |
+| `reset_potential` | `0.0` | Voltage set to this after firing |
+| `initial_voltage` | `0.0` | Starting membrane voltage |
+| `v_rest` | `0.0` | Resting potential; membrane leaks toward this |
+
+### Extended properties
+
+| Field | Default | Description |
+|---|---|---|
+| `activation_fn` | `"lif"` | Neuron model — `lif`, `relu`, `softplus`, `tanh`, `sigmoid`, `rbf` |
+| `bias` | `0.0` | Constant additive current, independent of synapses |
+| `gain` | `1.0` | Scales all incoming synaptic current |
+| `noise_std` | `0.0` | Gaussian noise std injected per step; 0 = off |
+| `dropout_prob` | `0.0` | Per-step silencing probability; 0 = never, 1 = always |
+| `adaptation_rate` | `0.0` | Threshold rise per spike (spike-frequency adaptation) |
+| `adaptation_decay` | `1.0` | Per-step decay of adaptation back to baseline |
+| `rbf_centre` | `0.5` | Voltage at which RBF unit is maximally active |
+| `rbf_sigma` | `0.3` | Width of the RBF Gaussian |
+| `input_schedule` | `null` | Dict with `mode`, `amplitude`, `period`, `offset`, `duration` |
+
+### Activation function cheat-sheet
+
+| Type | Fire condition / output | Best used for |
+|---|---|---|
+| `lif` | v ≥ θ → reset | Standard spiking — default biological model |
+| `relu` | max(0, v) | Rate-code neurons, non-negative output |
+| `softplus` | log(1 + exp(v)) | Smooth relu; always positive |
+| `tanh` | tanh(v) ∈ [−1, 1] | Biphasic / inhibitory output |
+| `sigmoid` | 1/(1+exp(−v)) ∈ [0,1] | Probabilistic firing (stochastic units) |
+| `rbf` | exp(−½(v−centre)²/σ²) | Pattern detector — fires for specific voltage range |
+
+### Plasticity properties (per synapse)
+
+| Field | Default | Description |
+|---|---|---|
+| `plasticity_rule` | `null` | `"hebbian"` or `"oja"` for online weight updates |
+| `plasticity_lr` | `0.01` | Learning rate for the plasticity rule |
+
+---
+
+> **Performance note:** All extended properties use NumPy vectorised operations — there is no per-step Python loop cost, even for 63 000 neurons. New properties add at most a single O(N) array pass each step.

@@ -1,12 +1,74 @@
 # Unicorn Architecture
 
-## Current Runtime Split
+## Current Implementation
 
-Unicorn currently keeps simulation and layout generation in Python, then renders precomputed results in browser-based viewers.
+Unicorn is structured as a layered pipeline from network definition to interactive visualization.
 
-- `backend/`: network loading and SNN stepping
-- `physics_engine/`: force-directed layout solver
-- `viewer/`: HTML-based 3D preview and spike playback
+### Layer overview
+
+```
+JSON config / CLI mutations
+        │
+        ▼
+tools/network_builder.py   ← network definition + property alteration
+        │
+        ▼
+backend/neuron_sim/simple_snn.py   ← vectorized LIF + extended properties
+        │  (NumPy, O(N) per step for all new properties)
+        ▼
+physics_engine/force_layout/simple_layout.py   ← chunked O(N²→N) layout
+        │
+        ▼
+tools/webgpu_preview.py   ← WebGPU renderer (property-aware)
+        │
+        ▼
+output/*.html — self-contained, opens without a server
+```
+
+### Extended neuron property pipeline
+
+All per-neuron properties travel from JSON through to the visualizer:
+
+1. **JSON schema** — each neuron object carries optional extended properties:
+   `activation_fn`, `bias`, `gain`, `noise_std`, `dropout_prob`,
+   `adaptation_rate`, `adaptation_decay`, `v_rest`, `rbf_centre`, `rbf_sigma`,
+   `input_schedule`, `plasticity_rule`.
+
+2. **Simulator** (`SimpleSNN`) — reads every property into a NumPy array at
+   construction time. Per step: 11 vectorised passes (dropout mask, noise,
+   bias, gain, activation dispatch, adaptation, refractory, plasticity). No
+   Python loops.
+
+3. **Payload builder** (`build_webgpu_payload`) — encodes a `neuronProps`
+   array into the HTML payload: `[activation_fn_id, noise_std, dropout_prob,
+   adaptation_rate, gain]` × N neurons.
+
+4. **GPU compute shader** — reads `neuronProps` to apply per-neuron dropout
+   (hash-based PRNG seeded by step × neuron_id) before computing intensity
+   decay.
+
+5. **GPU vertex shader** — reads `neuronProps` to:
+   - select base tint from activation type (6 colours)
+   - shimmer brightness for `noise_std > 0`
+   - dim base colour proportional to `adaptation_rate`
+   - desaturate toward grey proportional to `dropout_prob`
+
+6. **HUD legend** — JavaScript renders a per-type count legend in the overlay,
+   listing all types present with `(dropout)`, `(noise)`, `(adapt)` annotations.
+
+### Visualizer rendering features
+
+| Property | Visual effect |
+|---|---|
+| `activation_fn` | Base tint colour (blue/green/cyan/purple/orange/yellow) |
+| `gain` | Crosshair arm size (± 50-300% of base arm) |
+| `noise_std` | Sin-wave brightness shimmer (`timeSec * 8 Hz`) |
+| `adaptation_rate` | Base colour dimmed by up to 50% |
+| `dropout_prob` | Grey desaturation up to 50% |
+| Spike intensity | Warm amber glow, decays per `payload.decay = 0.92` |
+
+### Current runtime split
+
 
 ## High-Performance Graphics Rendering Plan
 
