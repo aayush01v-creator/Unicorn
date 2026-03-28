@@ -211,6 +211,113 @@ def create_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("summary", help="Print a concise network summary.")
     subparsers.add_parser("validate", help="Validate references and numeric shapes.")
+
+    # ── set-neuron ──────────────────────────────────────────────────────────
+    sn = subparsers.add_parser(
+        "set-neuron",
+        help="Patch any property on an existing neuron.",
+    )
+    sn.add_argument("id", type=int, help="Neuron id to modify.")
+    sn.add_argument("--threshold",         type=float)
+    sn.add_argument("--tau",               type=float, dest="membrane_time_constant")
+    sn.add_argument("--refractory-period", type=float)
+    sn.add_argument("--reset-potential",   type=float)
+    sn.add_argument("--v-rest",            type=float)
+    sn.add_argument("--input-current",     type=float)
+    sn.add_argument("--bias",              type=float)
+    sn.add_argument("--gain",              type=float)
+    sn.add_argument("--noise-std",         type=float, dest="noise_std")
+    sn.add_argument("--dropout",           type=float, dest="dropout_prob")
+    sn.add_argument("--adaptation-rate",   type=float, dest="adaptation_rate")
+    sn.add_argument("--adaptation-decay",  type=float, dest="adaptation_decay")
+    sn.add_argument(
+        "--activation",
+        choices=["lif", "relu", "softplus", "tanh", "sigmoid", "rbf"],
+        dest="activation_fn",
+    )
+    sn.add_argument("--rbf-centre", type=float, dest="rbf_centre")
+    sn.add_argument("--rbf-sigma",  type=float, dest="rbf_sigma")
+
+    # ── mutate ──────────────────────────────────────────────────────────────
+    mt = subparsers.add_parser(
+        "mutate",
+        help="Bulk property delta across a slice of neurons.",
+    )
+    mt.add_argument(
+        "--select",
+        default="all",
+        help=(
+            "Which neurons to target: 'all', 'range:0-9', 'every:3', "
+            "or comma-separated ids like '0,3,7'."
+        ),
+    )
+    mt.add_argument(
+        "--set",
+        metavar="key=val,...",
+        help="Set properties to exact values, e.g. 'noise_std=0.05,dropout_prob=0.1'.",
+    )
+    mt.add_argument(
+        "--add",
+        metavar="key=delta,...",
+        help="Add delta to properties, e.g. 'threshold=-0.1,gain=0.2'.",
+    )
+    mt.add_argument(
+        "--scale",
+        metavar="key=factor,...",
+        help="Multiply properties by factor, e.g. 'gain=2.0,noise_std=0.5'.",
+    )
+
+    # ── apply-profile ───────────────────────────────────────────────────────
+    ap = subparsers.add_parser(
+        "apply-profile",
+        help="Apply a named property preset to a set of neurons.",
+    )
+    ap.add_argument(
+        "profile",
+        nargs="?",
+        choices=["inhibitory", "driver", "adaptive", "stochastic", "silent"],
+        help="Built-in profile name.",
+    )
+    ap.add_argument(
+        "--from-file",
+        metavar="FILE",
+        help="JSON file containing custom profiles.",
+    )
+    ap.add_argument("--name", help="Profile name when using --from-file.")
+    ap.add_argument(
+        "--to",
+        default="all",
+        help="Target neurons: 'all', 'range:0-9', 'every:3', or '0,3,7'.",
+    )
+
+    # ── set-schedule ────────────────────────────────────────────────────────
+    ss = subparsers.add_parser(
+        "set-schedule",
+        help="Attach a time-varying input-current schedule to a neuron.",
+    )
+    ss.add_argument("id", type=int)
+    ss.add_argument(
+        "--mode",
+        choices=["constant", "ramp", "pulse", "sine"],
+        default="sine",
+    )
+    ss.add_argument("--amplitude", type=float, default=1.0)
+    ss.add_argument("--period",    type=float, default=10.0,
+                    help="Steps per cycle (pulse/sine) or ramp duration.")
+    ss.add_argument("--offset",    type=float, default=0.0,
+                    help="Constant baseline added to schedule output.")
+    ss.add_argument("--duration",  type=float, default=None,
+                    help="Limit schedule to this many steps (ramp only).")
+
+    # ── props ───────────────────────────────────────────────────────────────
+    pr = subparsers.add_parser(
+        "props",
+        help="Print all properties of selected neurons.",
+    )
+    pr.add_argument(
+        "ids", nargs="*", type=int, help="Neuron ids to inspect (default: all)."
+    )
+
     return parser
 
 
@@ -576,19 +683,247 @@ def cmd_generate(args: argparse.Namespace) -> str:
     )
 
 
+# ── Helpers shared by new commands ───────────────────────────────────────────
+
+def _parse_selector(select_str: str, all_ids: list[int]) -> list[int]:
+    """Return the list of neuron ids matching a selector expression."""
+    s = select_str.strip()
+    if s == "all":
+        return list(all_ids)
+    if s.startswith("range:"):
+        lo, hi = s[6:].split("-")
+        return [i for i in all_ids if int(lo) <= i <= int(hi)]
+    if s.startswith("every:"):
+        step = int(s[6:])
+        return all_ids[::step]
+    # Comma-separated ids
+    return [int(x) for x in s.split(",") if x.strip()]
+
+
+def _parse_kv(raw: str | None) -> dict[str, float]:
+    """Parse 'key=val,key=val' string into a {key: float} dict."""
+    if not raw:
+        return {}
+    result = {}
+    for token in raw.split(","):
+        token = token.strip()
+        if "=" not in token:
+            continue
+        k, v = token.split("=", 1)
+        result[k.strip()] = float(v.strip())
+    return result
+
+
+_NEURON_PROP_KEYS = {
+    "threshold", "membrane_time_constant", "refractory_period",
+    "reset_potential", "initial_voltage", "v_rest",
+    "bias", "gain", "noise_std", "dropout_prob",
+    "adaptation_rate", "adaptation_decay",
+    "activation_fn", "rbf_centre", "rbf_sigma",
+}
+
+BUILTIN_PROFILES: dict[str, dict] = {
+    "inhibitory":  {"gain": -1.0,  "threshold": 0.8,   "membrane_time_constant": 5.0},
+    "driver":      {"input_current": 1.5, "threshold": 0.7, "noise_std": 0.02},
+    "adaptive":    {"adaptation_rate": 0.3, "adaptation_decay": 0.9, "refractory_period": 2.0},
+    "stochastic":  {"dropout_prob": 0.25, "noise_std": 0.05, "activation_fn": "sigmoid"},
+    "silent":      {"input_current": 0.0, "dropout_prob": 1.0},
+}
+
+
+# ── set-neuron ────────────────────────────────────────────────────────────────
+
+def cmd_set_neuron(args: argparse.Namespace) -> str:
+    path = Path(args.path)
+    network = load_network(path)
+    idx = get_neuron_index(network, args.id)
+    neu = network["neurons"][idx]
+
+    _DIRECT_PROPS = [
+        "threshold", "membrane_time_constant", "refractory_period",
+        "reset_potential", "v_rest", "bias", "gain", "noise_std",
+        "dropout_prob", "adaptation_rate", "adaptation_decay",
+        "activation_fn", "rbf_centre", "rbf_sigma",
+    ]
+    changed = []
+    for prop in _DIRECT_PROPS:
+        val = getattr(args, prop, None)
+        if val is not None:
+            neu[prop] = val
+            changed.append(f"{prop}={val}")
+
+    # input_current lives in the top-level array
+    ic = getattr(args, "input_current", None)
+    if ic is not None:
+        ensure_input_current_shape(network)
+        network["input_current"][idx] = ic
+        changed.append(f"input_current={ic}")
+
+    save_network(path, network)
+    return f"Updated neuron {args.id}: {', '.join(changed) if changed else '(no changes)'}"
+
+
+# ── mutate ────────────────────────────────────────────────────────────────────
+
+def cmd_mutate(args: argparse.Namespace) -> str:
+    path = Path(args.path)
+    network = load_network(path)
+    all_ids = [n["id"] for n in network["neurons"]]
+    targets = _parse_selector(args.select, all_ids)
+    ensure_input_current_shape(network)
+
+    sets   = _parse_kv(args.set)
+    adds   = _parse_kv(args.add)
+    scales = _parse_kv(args.scale)
+
+    id_to_idx = {n["id"]: i for i, n in enumerate(network["neurons"])}
+
+    for nid in targets:
+        idx = id_to_idx[nid]
+        neu = network["neurons"][idx]
+
+        for k, v in sets.items():
+            if k == "input_current":
+                network["input_current"][idx] = v
+            else:
+                neu[k] = v
+
+        for k, delta in adds.items():
+            if k == "input_current":
+                network["input_current"][idx] = float(network["input_current"][idx]) + delta
+            else:
+                neu[k] = float(neu.get(k, 0.0)) + delta
+
+        for k, factor in scales.items():
+            if k == "input_current":
+                network["input_current"][idx] = float(network["input_current"][idx]) * factor
+            else:
+                neu[k] = float(neu.get(k, 1.0)) * factor
+
+    save_network(path, network)
+    ops = []
+    if sets:   ops.append(f"set {sets}")
+    if adds:   ops.append(f"add {adds}")
+    if scales: ops.append(f"scale {scales}")
+    return (
+        f"Mutated {len(targets)} neurons "
+        f"(selector='{args.select}'): {'; '.join(ops) or '(nothing)'}"
+    )
+
+
+# ── apply-profile ─────────────────────────────────────────────────────────────
+
+def cmd_apply_profile(args: argparse.Namespace) -> str:
+    path = Path(args.path)
+    network = load_network(path)
+    all_ids = [n["id"] for n in network["neurons"]]
+    targets = _parse_selector(args.to, all_ids)
+    ensure_input_current_shape(network)
+
+    # Resolve profile dict
+    if getattr(args, "from_file", None):
+        with open(args.from_file) as fh:
+            custom = json.load(fh)
+        pname = args.name or args.profile
+        if pname not in custom:
+            raise ValueError(f"Profile '{pname}' not found in {args.from_file}")
+        profile = custom[pname]
+    elif args.profile:
+        profile = BUILTIN_PROFILES[args.profile]
+    else:
+        raise ValueError("Provide a built-in profile name or --from-file + --name.")
+
+    id_to_idx = {n["id"]: i for i, n in enumerate(network["neurons"])}
+    for nid in targets:
+        idx = id_to_idx[nid]
+        neu = network["neurons"][idx]
+        for k, v in profile.items():
+            if k == "input_current":
+                network["input_current"][idx] = v
+            else:
+                neu[k] = v
+
+    save_network(path, network)
+    pname = args.profile or args.name
+    return f"Applied profile '{pname}' to {len(targets)} neurons (selector='{args.to}')"
+
+
+# ── set-schedule ──────────────────────────────────────────────────────────────
+
+def cmd_set_schedule(args: argparse.Namespace) -> str:
+    path = Path(args.path)
+    network = load_network(path)
+    idx = get_neuron_index(network, args.id)
+    sched: dict[str, Any] = {
+        "mode":      args.mode,
+        "amplitude": args.amplitude,
+        "period":    args.period,
+        "offset":    args.offset,
+    }
+    if args.duration is not None:
+        sched["duration"] = args.duration
+    network["neurons"][idx]["input_schedule"] = sched
+    save_network(path, network)
+    return (
+        f"Attached {args.mode} schedule (A={args.amplitude}, T={args.period}) "
+        f"to neuron {args.id}"
+    )
+
+
+# ── props ─────────────────────────────────────────────────────────────────────
+
+_ALL_PROPS = [
+    "threshold", "membrane_time_constant", "refractory_period",
+    "reset_potential", "initial_voltage", "v_rest",
+    "bias", "gain", "noise_std", "dropout_prob",
+    "adaptation_rate", "adaptation_decay",
+    "activation_fn", "rbf_centre", "rbf_sigma", "input_schedule",
+]
+
+def cmd_props(args: argparse.Namespace) -> str:
+    path = Path(args.path)
+    network = load_network(path)
+    ensure_input_current_shape(network)
+    target_ids = set(args.ids) if args.ids else None
+
+    lines = []
+    for i, neu in enumerate(network["neurons"]):
+        nid = neu["id"]
+        if target_ids is not None and nid not in target_ids:
+            continue
+        ic = network["input_current"][i]
+        row = [f"Neuron {nid:>3}  input_current={ic:+.4f}"]
+        for prop in _ALL_PROPS:
+            val = neu.get(prop)
+            if val is None:
+                continue
+            if isinstance(val, float):
+                row.append(f"  {prop}={val:.4f}")
+            else:
+                row.append(f"  {prop}={val}")
+        lines.append("\n".join(row))
+
+    return "\n\n".join(lines) or "No neurons found."
+
+
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
     commands = {
-        "init": cmd_init,
-        "generate": cmd_generate,
-        "add-neuron": cmd_add_neuron,
-        "add-synapse": cmd_add_synapse,
-        "set-input": cmd_set_input,
-        "set-config": cmd_set_config,
-        "summary": cmd_summary,
-        "validate": lambda parsed_args: (
+        "init":           cmd_init,
+        "generate":       cmd_generate,
+        "add-neuron":     cmd_add_neuron,
+        "add-synapse":    cmd_add_synapse,
+        "set-input":      cmd_set_input,
+        "set-config":     cmd_set_config,
+        "set-neuron":     cmd_set_neuron,
+        "mutate":         cmd_mutate,
+        "apply-profile":  cmd_apply_profile,
+        "set-schedule":   cmd_set_schedule,
+        "props":          cmd_props,
+        "summary":        cmd_summary,
+        "validate":       lambda parsed_args: (
             validate_network(load_network(Path(parsed_args.path)))
             or f"Validated {parsed_args.path}"
         ),
