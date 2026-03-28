@@ -1,5 +1,7 @@
 import argparse
 import json
+import math
+import random as _random
 from pathlib import Path
 from typing import Any
 
@@ -66,6 +68,14 @@ def create_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--steps", type=int, default=10)
     init_parser.add_argument("--dt", type=float, default=1.0)
     init_parser.add_argument("--refractory-period", type=float, default=0.0)
+    init_parser.add_argument(
+        "--from-config",
+        metavar="CONFIG",
+        help=(
+            "Bootstrap a complete network from a JSON config file. "
+            "See samples/network_config.json for an example."
+        ),
+    )
 
     neuron_parser = subparsers.add_parser(
         "add-neuron", help="Append a neuron definition."
@@ -78,6 +88,102 @@ def create_parser() -> argparse.ArgumentParser:
     neuron_parser.add_argument("--initial-voltage", type=float, default=None)
     neuron_parser.add_argument("--input-current", type=float, default=0.0)
 
+    # ------------------------------------------------------------------ generate
+    gen_parser = subparsers.add_parser(
+        "generate",
+        help=(
+            "Generate a complete N-neuron network in one step. "
+            "Shared defaults apply to every neuron; per-neuron overrides "
+            "are given as comma-separated key=value lists."
+        ),
+    )
+    gen_parser.add_argument(
+        "count", type=int, help="Number of neurons to create (ids 0…N-1)."
+    )
+    # — shared neuron defaults —
+    gen_parser.add_argument(
+        "--threshold", type=float, default=1.0, help="Firing threshold (default 1.0)."
+    )
+    gen_parser.add_argument(
+        "--tau",
+        dest="membrane_time_constant",
+        type=float,
+        default=10.0,
+        help="Membrane time constant τ (default 10.0).",
+    )
+    gen_parser.add_argument(
+        "--refractory-period",
+        type=float,
+        default=None,
+        help="Per-neuron refractory period (overrides global).",
+    )
+    gen_parser.add_argument(
+        "--reset-potential",
+        type=float,
+        default=None,
+        help="Reset potential after spike.",
+    )
+    gen_parser.add_argument(
+        "--input-current",
+        type=float,
+        default=0.0,
+        help="Input current applied to every neuron (default 0.0).",
+    )
+    # — per-neuron overrides (CSV key=value lists) —
+    gen_parser.add_argument(
+        "--neuron-overrides",
+        metavar="id:key=val,...",
+        default="",
+        help=(
+            "Comma-separated per-neuron overrides, e.g. "
+            "\"0:threshold=1.5,input_current=0.8 2:tau=5\"  "
+            "(space-separated entries, colon separates id from key=val pairs)."
+        ),
+        nargs="*",
+    )
+    # — simulation settings —
+    gen_parser.add_argument("--steps", type=int, default=10)
+    gen_parser.add_argument("--dt", type=float, default=1.0)
+    gen_parser.add_argument(
+        "--global-refractory", type=float, default=0.0, dest="global_refractory"
+    )
+    # — topology —
+    gen_parser.add_argument(
+        "--topology",
+        choices=["none", "chain", "ring", "all-to-all", "random"],
+        default="none",
+        help=(
+            "Auto-wire synapses: "
+            "'chain' (0→1→…→N-1), "
+            "'ring' (chain + N-1→0), "
+            "'all-to-all' (every pair), "
+            "'random' (use --density and --seed). "
+            "Default: none."
+        ),
+    )
+    gen_parser.add_argument(
+        "--weight",
+        type=float,
+        default=0.5,
+        help="Default synapse weight for topology presets (default 0.5).",
+    )
+    gen_parser.add_argument(
+        "--density",
+        type=float,
+        default=0.3,
+        help="Fraction of possible synapses to create for 'random' topology (0–1).",
+    )
+    gen_parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for 'random' topology (for reproducibility).",
+    )
+    gen_parser.add_argument(
+        "--force", action="store_true", help="Overwrite an existing file."
+    )
+
+    # -------------------------------------------------------------------
     synapse_parser = subparsers.add_parser(
         "add-synapse", help="Append a synapse definition."
     )
@@ -142,6 +248,17 @@ def cmd_init(args: argparse.Namespace) -> str:
     path = Path(args.path)
     if path.exists() and not args.force:
         raise FileExistsError(f"{path} already exists; rerun with --force to overwrite")
+
+    # Bootstrap from an external config file if provided
+    if getattr(args, "from_config", None):
+        config_path = Path(args.from_config)
+        with config_path.open("r") as fh:
+            cfg = json.load(fh)
+        network = _network_from_config(cfg)
+        validate_network(network)
+        save_network(path, network)
+        return f"Initialized {path} from {config_path}"
+
     network = json.loads(json.dumps(DEFAULT_NETWORK))
     network["steps"] = args.steps
     network["dt"] = args.dt
@@ -256,12 +373,216 @@ def cmd_summary(args: argparse.Namespace) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# helpers for generate / from-config
+# ---------------------------------------------------------------------------
+
+
+def _parse_neuron_overrides(override_list: list[str]) -> dict[int, dict[str, Any]]:
+    """Parse override tokens like '0:threshold=1.5,input_current=0.8'.
+
+    Returns {neuron_id: {field: value, ...}, ...}.
+    """
+    result: dict[int, dict[str, Any]] = {}
+    float_fields = {
+        "threshold",
+        "membrane_time_constant",
+        "tau",
+        "refractory_period",
+        "reset_potential",
+        "initial_voltage",
+        "input_current",
+    }
+    for token in override_list or []:
+        if ":" not in token:
+            raise ValueError(
+                f"Invalid override '{token}': expected format 'id:key=val,...'"
+            )
+        id_str, kv_str = token.split(":", 1)
+        nid = int(id_str)
+        overrides: dict[str, Any] = {}
+        for kv in kv_str.split(","):
+            k, v = kv.strip().split("=", 1)
+            k = k.strip()
+            # normalise tau alias
+            if k == "tau":
+                k = "membrane_time_constant"
+            overrides[k] = float(v) if k in float_fields else v
+        result[nid] = overrides
+    return result
+
+
+def _wire_topology(
+    n: int, topology: str, weight: float, density: float, seed: int | None
+) -> list[dict[str, Any]]:
+    """Return a synapse list for the requested auto-wire topology."""
+    synapses: list[dict[str, Any]] = []
+    if topology == "none":
+        return synapses
+    if topology in ("chain", "ring"):
+        for i in range(n - 1):
+            synapses.append({"from": i, "to": i + 1, "weight": weight})
+        if topology == "ring" and n > 1:
+            synapses.append({"from": n - 1, "to": 0, "weight": weight})
+    elif topology == "all-to-all":
+        for src in range(n):
+            for tgt in range(n):
+                if src != tgt:
+                    synapses.append({"from": src, "to": tgt, "weight": weight})
+    elif topology == "random":
+        rng = _random.Random(seed)
+        for src in range(n):
+            for tgt in range(n):
+                if src != tgt and rng.random() < density:
+                    synapses.append({"from": src, "to": tgt, "weight": weight})
+    return synapses
+
+
+def _network_from_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Build a full network dict from a compact config recipe.
+
+    Example config shape::
+
+        {
+          "count": 5,
+          "steps": 20,
+          "dt": 0.5,
+          "global_refractory": 1.0,
+          "threshold": 1.0,
+          "tau": 10.0,
+          "input_current": 0.0,
+          "topology": "ring",
+          "weight": 0.6,
+          "density": 0.3,
+          "seed": 42,
+          "neuron_overrides": [
+            {"id": 0, "input_current": 1.2, "threshold": 0.8},
+            {"id": 2, "tau": 5.0, "refractory_period": 2.0}
+          ],
+          "synapses": [
+            {"from": 0, "to": 3, "weight": -0.4}
+          ]
+        }
+    """
+    n = int(cfg["count"])
+    threshold = float(cfg.get("threshold", 1.0))
+    tau = float(cfg.get("tau", 10.0))
+    default_refractory = cfg.get("refractory_period", cfg.get("global_refractory"))
+    reset_potential = cfg.get("reset_potential")
+    default_current = float(cfg.get("input_current", 0.0))
+
+    # index overrides by id
+    overrides_by_id: dict[int, dict] = {}
+    for entry in cfg.get("neuron_overrides", []):
+        overrides_by_id[int(entry["id"])] = entry
+
+    neurons = []
+    currents = []
+    for nid in range(n):
+        ov = overrides_by_id.get(nid, {})
+        neuron: dict[str, Any] = {
+            "id": nid,
+            "threshold": float(ov.get("threshold", threshold)),
+            "membrane_time_constant": float(ov.get("tau", ov.get("membrane_time_constant", tau))),
+        }
+        ref = ov.get("refractory_period", default_refractory)
+        if ref is not None:
+            neuron["refractory_period"] = float(ref)
+        rp = ov.get("reset_potential", reset_potential)
+        if rp is not None:
+            neuron["reset_potential"] = float(rp)
+        iv = ov.get("initial_voltage")
+        if iv is not None:
+            neuron["initial_voltage"] = float(iv)
+        neurons.append(neuron)
+        currents.append(float(ov.get("input_current", default_current)))
+
+    topology = cfg.get("topology", "none")
+    weight = float(cfg.get("weight", 0.5))
+    density = float(cfg.get("density", 0.3))
+    seed = cfg.get("seed")
+    synapses = _wire_topology(n, topology, weight, density, seed)
+    # append any explicit synapse overrides
+    for syn in cfg.get("synapses", []):
+        synapses.append({"from": int(syn["from"]), "to": int(syn["to"]), "weight": float(syn["weight"])})
+
+    network: dict[str, Any] = {
+        "neurons": neurons,
+        "synapses": sorted(synapses, key=lambda s: (s["from"], s["to"])),
+        "input_current": currents,
+        "steps": int(cfg.get("steps", 10)),
+        "dt": float(cfg.get("dt", 1.0)),
+        "refractory_period": float(cfg.get("global_refractory", cfg.get("refractory_period", 0.0))),
+    }
+    return network
+
+
+def cmd_generate(args: argparse.Namespace) -> str:
+    """Build a full N-neuron network in a single command."""
+    path = Path(args.path)
+    if path.exists() and not args.force:
+        raise FileExistsError(f"{path} already exists; rerun with --force to overwrite")
+
+    n = args.count
+    if n <= 0:
+        raise ValueError("count must be a positive integer")
+
+    # parse per-neuron overrides
+    override_tokens = args.neuron_overrides or []
+    overrides = _parse_neuron_overrides(override_tokens)
+
+    neurons = []
+    currents = []
+    for nid in range(n):
+        ov = overrides.get(nid, {})
+        neuron: dict[str, Any] = {
+            "id": nid,
+            "threshold": float(ov.get("threshold", args.threshold)),
+            "membrane_time_constant": float(
+                ov.get(
+                    "membrane_time_constant",
+                    ov.get("tau", args.membrane_time_constant),
+                )
+            ),
+        }
+        ref = ov.get("refractory_period", args.refractory_period)
+        if ref is not None:
+            neuron["refractory_period"] = float(ref)
+        rp = ov.get("reset_potential", args.reset_potential)
+        if rp is not None:
+            neuron["reset_potential"] = float(rp)
+        neurons.append(neuron)
+        currents.append(float(ov.get("input_current", args.input_current)))
+
+    synapses = _wire_topology(
+        n, args.topology, args.weight, args.density, args.seed
+    )
+
+    network: dict[str, Any] = {
+        "neurons": neurons,
+        "synapses": sorted(synapses, key=lambda s: (s["from"], s["to"])),
+        "input_current": currents,
+        "steps": args.steps,
+        "dt": args.dt,
+        "refractory_period": args.global_refractory,
+    }
+    validate_network(network)
+    save_network(path, network)
+
+    syn_count = len(synapses)
+    return (
+        f"Generated {n}-neuron network ({args.topology} topology, "
+        f"{syn_count} synapse{'' if syn_count == 1 else 's'}) → {path}"
+    )
+
+
 def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
 
     commands = {
         "init": cmd_init,
+        "generate": cmd_generate,
         "add-neuron": cmd_add_neuron,
         "add-synapse": cmd_add_synapse,
         "set-input": cmd_set_input,
