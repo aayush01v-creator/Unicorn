@@ -53,10 +53,42 @@ Open the generated files from your `output/` directory:
 
 ## Next Steps
 
-Use the included helper script to rapidly trace out new structured probability models or custom topological parameters from the command line:
+### Build networks instantly with `generate`
+
+Instead of adding neurons one at a time, create an entire network in a single command:
+
+```bash
+# 8-neuron ring — all neurons share the same defaults
+python -m tools.network_builder samples/network.json generate 8 \
+  --topology ring --tau 8 --steps 20 --dt 0.5 --force
+
+# 5-neuron random network with per-neuron overrides
+python -m tools.network_builder samples/network.json generate 5 \
+  --topology random --density 0.4 --seed 42 \
+  --neuron-overrides "0:input_current=1.2,threshold=0.8" "3:tau=4" \
+  --force
+```
+
+### Seed a network from a config file
+
+Version-control your network topology as a compact JSON recipe:
+
+```bash
+python -m tools.network_builder samples/network.json init \
+  --from-config samples/network_config.json --force
+```
+
+See [`samples/network_config.json`](../samples/network_config.json) for a fully annotated example.
+
+### Incremental editing
+
+Fine-tune an existing network without regenerating it:
 
 ```bash
 python -m tools.network_builder samples/network.json add-neuron 3 --input-current 0.4
 python -m tools.network_builder samples/network.json add-synapse 2 3 0.8
+python -m tools.network_builder samples/network.json set-input 0 1.5
 python -m tools.network_builder samples/network.json summary
 ```
+
+For a complete CLI reference covering all subcommands and options, see [`docs/user_guide.md`](user_guide.md).
