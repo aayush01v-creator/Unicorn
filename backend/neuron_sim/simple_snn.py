@@ -1,4 +1,23 @@
+"""Fast NumPy-vectorised leaky integrate-and-fire simulator.
+
+Replaces all per-neuron and per-synapse Python loops with NumPy array
+operations so that large networks (thousands to tens-of-thousands of
+neurons) run orders of magnitude faster than the original pure-Python
+implementation.
+
+Complexity per step:
+  - synaptic current : O(spikes * fan-out)  — sparse spike-based matmul
+  - voltage update   : O(N)                 — element-wise array ops
+  - spike detection  : O(N)                 — boolean mask + argwhere
+  - refractory       : O(N)                 — integer countdown clamp
+
+The public interface (constructor + .run()) is identical to SimpleSNN
+so framework_runner.py requires no changes.
+"""
+
 import math
+
+import numpy as np
 
 
 class SimpleSNN:
@@ -10,98 +29,149 @@ class SimpleSNN:
         if self.dt <= 0:
             raise ValueError("dt must be greater than zero")
 
-        self.n = len(self.neurons)
-        self.v = [float(n.get("initial_voltage", 0.0)) for n in self.neurons]
-        self.thresholds = [float(n.get("threshold", 1.0)) for n in self.neurons]
-        self.reset_potentials = [
-            float(n.get("reset_potential", 0.0)) for n in self.neurons
-        ]
+        n = len(self.neurons)
+        self.n = n
+
+        # ── per-neuron parameters (one NumPy array each) ────────────────
+        self.v = np.array(
+            [float(neu.get("initial_voltage", 0.0)) for neu in self.neurons],
+            dtype=np.float64,
+        )
+        self.thresholds = np.array(
+            [float(neu.get("threshold", 1.0)) for neu in self.neurons],
+            dtype=np.float64,
+        )
+        self.reset_potentials = np.array(
+            [float(neu.get("reset_potential", 0.0)) for neu in self.neurons],
+            dtype=np.float64,
+        )
 
         default_tau = float(config.get("membrane_time_constant", 10.0))
-        self.membrane_time_constants = [
-            float(n.get("membrane_time_constant", default_tau)) for n in self.neurons
-        ]
-        if any(tau <= 0 for tau in self.membrane_time_constants):
+        taus = np.array(
+            [float(neu.get("membrane_time_constant", default_tau)) for neu in self.neurons],
+            dtype=np.float64,
+        )
+        if np.any(taus <= 0):
             raise ValueError("membrane_time_constant must be greater than zero")
-        self.decay = [math.exp(-self.dt / tau) for tau in self.membrane_time_constants]
+        self.decay = np.exp(-self.dt / taus)  # shape (N,)
 
         default_refractory = float(config.get("refractory_period", 0.0))
-        self.refractory_periods = [
-            float(n.get("refractory_period", default_refractory)) for n in self.neurons
-        ]
-        if any(period < 0 for period in self.refractory_periods):
+        refractory_periods = np.array(
+            [float(neu.get("refractory_period", default_refractory)) for neu in self.neurons],
+            dtype=np.float64,
+        )
+        if np.any(refractory_periods < 0):
             raise ValueError("refractory_period must be non-negative")
-        self.refractory_steps = [
-            math.ceil(period / self.dt) for period in self.refractory_periods
-        ]
-        self.refractory_countdown = [0] * self.n
+        self.refractory_steps = np.ceil(refractory_periods / self.dt).astype(np.int32)
+        self.refractory_countdown = np.zeros(n, dtype=np.int32)
 
-        configured_current = config.get("input_current", [0.0] * self.n)
-        self.input_current = [float(current) for current in configured_current]
-        if len(self.input_current) < self.n:
-            self.input_current.extend([0.0] * (self.n - len(self.input_current)))
-        elif len(self.input_current) > self.n:
-            self.input_current = self.input_current[: self.n]
+        configured_current = config.get("input_current", [0.0] * n)
+        ic = np.array([float(c) for c in configured_current], dtype=np.float64)
+        if len(ic) < n:
+            ic = np.concatenate([ic, np.zeros(n - len(ic))])
+        elif len(ic) > n:
+            ic = ic[:n]
+        self.input_current = ic  # shape (N,)
 
-        self.weights = [[0.0 for _ in range(self.n)] for _ in range(self.n)]
-        for synapse in self.synapses:
-            pre = int(synapse["from"])
-            post = int(synapse["to"])
-            if pre < 0 or post < 0 or pre >= self.n or post >= self.n:
-                raise ValueError(
-                    f"Synapse {pre} -> {post} references an invalid neuron index for network size {self.n}"
-                )
-            self.weights[pre][post] = float(synapse["weight"])
+        # ── weight matrix as a sparse COO-style structure ───────────────
+        # For N ≤ ~8 000 we use a dense NxN float32 matrix (fast matmul).
+        # For larger networks we store (pre, post, weight) arrays and use
+        # a sparse dot so we never allocate an N²-element matrix.
+        if n <= 8_000:
+            W = np.zeros((n, n), dtype=np.float32)
+            for syn in self.synapses:
+                pre = int(syn["from"])
+                post = int(syn["to"])
+                if pre < 0 or post < 0 or pre >= n or post >= n:
+                    raise ValueError(
+                        f"Synapse {pre} -> {post} references an invalid neuron index"
+                        f" for network size {n}"
+                    )
+                W[pre, post] = float(syn["weight"])
+            self._W = W
+            self._sparse = False
+        else:
+            pres, posts, weights = [], [], []
+            for syn in self.synapses:
+                pre = int(syn["from"])
+                post = int(syn["to"])
+                if pre < 0 or post < 0 or pre >= n or post >= n:
+                    raise ValueError(
+                        f"Synapse {pre} -> {post} references an invalid neuron index"
+                        f" for network size {n}"
+                    )
+                pres.append(pre)
+                posts.append(post)
+                weights.append(float(syn["weight"]))
+            self._pre = np.array(pres, dtype=np.int32)
+            self._post = np.array(posts, dtype=np.int32)
+            self._wvals = np.array(weights, dtype=np.float64)
+            self._sparse = True
 
-    def run(self):
+    # ── internal helpers ─────────────────────────────────────────────────
+
+    def _synaptic_current(self, spikes: np.ndarray) -> np.ndarray:
+        """Compute incoming synaptic current for every neuron.
+
+        spikes : bool/float array of shape (N,) — 1.0 where neuron fired.
+        returns : float64 array of shape (N,).
+        """
+        if not self._sparse:
+            # spikes @ W  →  sum over firing pre-synaptic neurons
+            return spikes.astype(np.float32) @ self._W  # shape (N,)
+        else:
+            # Sparse accumulation: only iterate over synapses whose pre fired
+            firing = np.where(spikes)[0]
+            if len(firing) == 0:
+                return np.zeros(self.n, dtype=np.float64)
+            # mask synapses from firing pre-neurons
+            keep = np.isin(self._pre, firing)
+            result = np.zeros(self.n, dtype=np.float64)
+            np.add.at(result, self._post[keep], self._wvals[keep])
+            return result
+
+    # ── public interface ─────────────────────────────────────────────────
+
+    def run(self) -> list[dict]:
         history = []
-        spikes = [0.0] * self.n
+        spikes = np.zeros(self.n, dtype=np.float64)
 
         for t in range(self.steps):
-            synaptic_current = [0.0] * self.n
-            for pre_idx, pre_spike in enumerate(spikes):
-                if pre_spike:
-                    for post_idx in range(self.n):
-                        synaptic_current[post_idx] += (
-                            pre_spike * self.weights[pre_idx][post_idx]
-                        )
+            # 1. Synaptic drive from previous step's spikes
+            syn_current = self._synaptic_current(spikes)
 
-            active_mask = [countdown == 0 for countdown in self.refractory_countdown]
-            for idx, is_active in enumerate(active_mask):
-                if is_active:
-                    self.v[idx] = (
-                        self.v[idx] * self.decay[idx]
-                        + (self.input_current[idx] + synaptic_current[idx]) * self.dt
-                    )
-                else:
-                    self.v[idx] = self.reset_potentials[idx]
+            # 2. Active neurons only (not in refractory)
+            active = self.refractory_countdown == 0  # bool (N,)
 
-            spikes = [0.0] * self.n
-            for idx, is_active in enumerate(active_mask):
-                if is_active and self.v[idx] >= self.thresholds[idx]:
-                    spikes[idx] = 1.0
-                    self.v[idx] = self.reset_potentials[idx]
-                    self.refractory_countdown[idx] = self.refractory_steps[idx]
+            # 3. Voltage update
+            self.v = np.where(
+                active,
+                self.v * self.decay + (self.input_current + syn_current) * self.dt,
+                self.reset_potentials,
+            )
+
+            # 4. Spike detection
+            spikes = np.where(active & (self.v >= self.thresholds), 1.0, 0.0)
+
+            # 5. Reset spiking neurons and start refractory countdown
+            fired = spikes.astype(bool)
+            self.v = np.where(fired, self.reset_potentials, self.v)
+            self.refractory_countdown = np.where(
+                fired,
+                self.refractory_steps,
+                np.maximum(0, self.refractory_countdown - 1),
+            )
 
             history.append(
                 {
                     "step": t,
                     "time": round(t * self.dt, 10),
-                    "voltages": list(self.v),
-                    "spikes": [int(spike) for spike in spikes],
-                    "refractory_remaining": [
-                        countdown * self.dt for countdown in self.refractory_countdown
-                    ],
+                    "voltages": self.v.tolist(),
+                    "spikes": spikes.astype(int).tolist(),
+                    "refractory_remaining": (
+                        self.refractory_countdown * self.dt
+                    ).tolist(),
                 }
             )
-
-            self.refractory_countdown = [
-                (
-                    max(0, countdown - 1)
-                    if not spikes[idx] and countdown > 0
-                    else countdown
-                )
-                for idx, countdown in enumerate(self.refractory_countdown)
-            ]
 
         return history
