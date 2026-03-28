@@ -1,6 +1,6 @@
 import unittest
 
-from webgpu_preview import build_webgpu_payload
+from tools.webgpu_preview import build_webgpu_payload
 
 
 class WebGpuPreviewPayloadTests(unittest.TestCase):

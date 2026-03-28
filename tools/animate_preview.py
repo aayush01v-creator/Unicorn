@@ -4,7 +4,7 @@ from pathlib import Path
 
 from backend.data_loader.json_loader import load_network
 from backend.neuron_sim.framework_runner import run_simulation
-from render_preview import ensure_positions
+from tools.render_preview import ensure_positions
 
 
 SPIKE_COLOR = "#f1c40f"
@@ -53,7 +53,10 @@ def build_node_trace(xs, ys, zs, labels, spikes, time_value):
 def build_trail_trace(xs, ys, zs, labels, intensities, time_value):
     go = go_module()
     sizes = [10 + (18 * intensity) for intensity in intensities]
-    opacities = [round(0.15 + (0.55 * intensity), 3) if intensity > 0 else 0.0 for intensity in intensities]
+    opacities = [
+        round(0.15 + (0.55 * intensity), 3) if intensity > 0 else 0.0
+        for intensity in intensities
+    ]
     hover_text = [
         f"{label}<br>time={time_value:.2f}<br>recent-spike-intensity={intensity:.2f}"
         for label, intensity in zip(labels, intensities)
@@ -63,7 +66,9 @@ def build_trail_trace(xs, ys, zs, labels, intensities, time_value):
         y=ys,
         z=zs,
         mode="markers",
-        marker=dict(size=sizes, color=TRAIL_COLOR, opacity=opacities, symbol="circle-open"),
+        marker=dict(
+            size=sizes, color=TRAIL_COLOR, opacity=opacities, symbol="circle-open"
+        ),
         hovertemplate="%{customdata}<extra></extra>",
         customdata=hover_text,
         name="Recent spike trail",
@@ -128,7 +133,9 @@ def compute_trail_intensities(history, step_index):
 def build_frame_data(history, step_index, xs, ys, zs, labels, pos, network):
     step_data = history[step_index]
     active_synapses = [
-        synapse for synapse in network["synapses"] if step_data["spikes"][synapse["from"]]
+        synapse
+        for synapse in network["synapses"]
+        if step_data["spikes"][synapse["from"]]
     ]
     trail_intensities = compute_trail_intensities(history, step_index)
     active_path_trace, active_path_marker_trace = build_active_path_trace(
@@ -140,25 +147,52 @@ def build_frame_data(history, step_index, xs, ys, zs, labels, pos, network):
     trail_trace = build_trail_trace(
         xs, ys, zs, labels, trail_intensities, step_data["time"]
     )
-    return step_data, [active_path_trace, active_path_marker_trace, trail_trace, node_trace]
+    return step_data, [
+        active_path_trace,
+        active_path_marker_trace,
+        trail_trace,
+        node_trace,
+    ]
 
 
 def animation_args(duration):
-    return [None, {"frame": {"duration": duration, "redraw": True}, "fromcurrent": True}]
+    return [
+        None,
+        {"frame": {"duration": duration, "redraw": True}, "fromcurrent": True},
+    ]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate spike animation from network/layout files.")
-    parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
-    parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON file")
-    parser.add_argument("--output", default="output/spike_animation.html", help="Animation HTML output path")
+    parser = argparse.ArgumentParser(
+        description="Generate spike animation from network/layout files."
+    )
+    parser.add_argument(
+        "network",
+        nargs="?",
+        default="samples/network.json",
+        help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file",
+    )
+    parser.add_argument(
+        "--layout",
+        default="samples/layout_output.json",
+        help="Path to layout JSON file",
+    )
+    parser.add_argument(
+        "--output",
+        default="output/spike_animation.html",
+        help="Animation HTML output path",
+    )
     parser.add_argument(
         "--spikes",
         dest="spikes",
         default=None,
         help="Optional path to an existing spike history JSON (alias for skipping simulation rerun)",
     )
-    parser.add_argument("--history-output", default="samples/spike_history.json", help="Spike history JSON output path")
+    parser.add_argument(
+        "--history-output",
+        default="samples/spike_history.json",
+        help="Spike history JSON output path",
+    )
     return parser.parse_args()
 
 
@@ -259,7 +293,8 @@ def main():
         )
 
     fig = go.Figure(
-        data=[edge_trace, weight_trace, arrow_trace, *initial_dynamic_traces], frames=frames
+        data=[edge_trace, weight_trace, arrow_trace, *initial_dynamic_traces],
+        frames=frames,
     )
 
     fig.update_layout(
@@ -291,14 +326,24 @@ def main():
                 "x": 0.0,
                 "y": 1.08,
                 "buttons": [
-                    {"label": label, "method": "animate", "args": animation_args(duration)}
+                    {
+                        "label": label,
+                        "method": "animate",
+                        "args": animation_args(duration),
+                    }
                     for label, duration in SPEEDS.items()
                 ]
                 + [
                     {
                         "label": "Pause",
                         "method": "animate",
-                        "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"}],
+                        "args": [
+                            [None],
+                            {
+                                "frame": {"duration": 0, "redraw": False},
+                                "mode": "immediate",
+                            },
+                        ],
                     }
                 ],
             }
@@ -310,7 +355,13 @@ def main():
                     {
                         "method": "animate",
                         "label": f"{step_data['step']} ({step_data['time']:.2f}s)",
-                        "args": [[str(step_data["step"])], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}],
+                        "args": [
+                            [str(step_data["step"])],
+                            {
+                                "frame": {"duration": 0, "redraw": True},
+                                "mode": "immediate",
+                            },
+                        ],
                     }
                     for step_data in history
                 ],

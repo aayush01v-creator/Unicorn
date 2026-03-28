@@ -26,12 +26,12 @@ Unicorn is a cross-platform tool that visualizes and simulates structured probab
 2. **Simulate Dynamics & Layout:**  
    ```bash
    python main.py samples/network.json
-   python layout_demo.py samples/network.json --output samples/layout_output.json
+   python -m tools.layout_demo samples/network.json --output samples/layout_output.json
    ```
 3. **Generate Static & Animated Previews:**  
    ```bash
-   python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
-   python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
+   python -m tools.render_preview samples/network.json --layout samples/layout_output.json --output output/network_preview.html
+   python -m tools.animate_preview samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
    ```
 
 Open the resulting `output/*.html` files in any modern browser to inspect the model. 

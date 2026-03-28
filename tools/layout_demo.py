@@ -6,9 +6,18 @@ from physics_engine.force_layout.simple_layout import ForceDirectedLayout
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate 3D layout from a network file.")
-    parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file")
-    parser.add_argument("--output", default="samples/layout_output.json", help="Layout JSON output path")
+    parser = argparse.ArgumentParser(
+        description="Generate 3D layout from a network file."
+    )
+    parser.add_argument(
+        "network",
+        nargs="?",
+        default="samples/network.json",
+        help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file",
+    )
+    parser.add_argument(
+        "--output", default="samples/layout_output.json", help="Layout JSON output path"
+    )
     return parser.parse_args()
 
 

@@ -38,7 +38,9 @@ def ensure_positions(network, layout):
         pos = {
             item["id"]: item["position"]
             for item in layout
-            if "id" in item and isinstance(item.get("position"), list) and len(item["position"]) == 3
+            if "id" in item
+            and isinstance(item.get("position"), list)
+            and len(item["position"]) == 3
         }
 
     neuron_ids = [neuron["id"] for neuron in network.get("neurons", [])]
@@ -56,10 +58,21 @@ def ensure_positions(network, layout):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate static 3D network preview HTML.")
-    parser.add_argument("network", nargs="?", default="samples/network.json", help="Path to network JSON")
-    parser.add_argument("--layout", default="samples/layout_output.json", help="Path to layout JSON")
-    parser.add_argument("--output", default="output/network_preview.html", help="Output HTML path")
+    parser = argparse.ArgumentParser(
+        description="Generate static 3D network preview HTML."
+    )
+    parser.add_argument(
+        "network",
+        nargs="?",
+        default="samples/network.json",
+        help="Path to network JSON",
+    )
+    parser.add_argument(
+        "--layout", default="samples/layout_output.json", help="Path to layout JSON"
+    )
+    parser.add_argument(
+        "--output", default="output/network_preview.html", help="Output HTML path"
+    )
     return parser.parse_args()
 
 
@@ -87,8 +100,12 @@ def compute_node_metrics(network):
 
 
 def network_summary(network):
-    excitatory = sum(1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) >= 0)
-    inhibitory = sum(1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) < 0)
+    excitatory = sum(
+        1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) >= 0
+    )
+    inhibitory = sum(
+        1 for syn in network.get("synapses", []) if syn.get("weight", 0.0) < 0
+    )
     return {
         "neurons": len(network.get("neurons", [])),
         "synapses": len(network.get("synapses", [])),
@@ -120,7 +137,9 @@ def build_edge_geometry(network, pos):
             "max_abs_weight": 1.0,
         }
 
-    max_abs_weight = max(abs(syn.get("weight", 0.0)) for syn in network["synapses"]) or 1.0
+    max_abs_weight = (
+        max(abs(syn.get("weight", 0.0)) for syn in network["synapses"]) or 1.0
+    )
 
     edge_x, edge_y, edge_z = [], [], []
     mid_x, mid_y, mid_z, weights, weight_text = [], [], [], [], []
@@ -198,7 +217,16 @@ def build_figure(network, pos):
         zs.append(z)
         labels.append(f"Random Variable {nid}")
         node_sizes.append(5 + (2 * total_degree))
-        node_colors.append(neuron.get("input_current", network.get("input_current", [0.0] * len(network["neurons"]))[nid] if nid < len(network.get("input_current", [])) else 0.0))
+        node_colors.append(
+            neuron.get(
+                "input_current",
+                (
+                    network.get("input_current", [0.0] * len(network["neurons"]))[nid]
+                    if nid < len(network.get("input_current", []))
+                    else 0.0
+                ),
+            )
+        )
         node_hover.append(
             "<br>".join(
                 [
@@ -215,7 +243,11 @@ def build_figure(network, pos):
         )
 
     geometry = build_edge_geometry(network, pos)
-    avg_line_width = sum(geometry["line_widths"]) / len(geometry["line_widths"]) if geometry["line_widths"] else 4
+    avg_line_width = (
+        sum(geometry["line_widths"]) / len(geometry["line_widths"])
+        if geometry["line_widths"]
+        else 4
+    )
 
     edge_trace = go.Scatter3d(
         x=geometry["edge_x"],
@@ -305,12 +337,12 @@ def build_figure(network, pos):
                 showarrow=False,
                 align="left",
                 text=(
-                    f"<span style='font-size: 12px; color: #b0b0b0'>"
-                    f"Structured probabilistic models use graphs (in the graph theory sense of 'nodes' or 'vertices' connected by edges)<br>"
-                    f"to represent interactions between random variables. Each node represents a random variable.<br>"
-                    f"Each edge represents a direct interaction. These direct interactions imply other, indirect interactions,<br>"
-                    f"but only the direct interactions need to be explicitly modeled. There is more than one way to describe the interaction."
-                    f"</span>"
+                    "<span style='font-size: 12px; color: #b0b0b0'>"
+                    "Structured probabilistic models use graphs (in the graph theory sense of 'nodes' or 'vertices' connected by edges)<br>"
+                    "to represent interactions between random variables. Each node represents a random variable.<br>"
+                    "Each edge represents a direct interaction. These direct interactions imply other, indirect interactions,<br>"
+                    "but only the direct interactions need to be explicitly modeled. There is more than one way to describe the interaction."
+                    "</span>"
                 ),
             ),
             dict(
@@ -323,10 +355,10 @@ def build_figure(network, pos):
                 text=(
                     f"Random Variables: {summary['neurons']} | Interactions: {summary['synapses']} | "
                     f"Positive: {summary['excitatory']} | Negative: {summary['inhibitory']}<br>"
-                    f"<span style='font-size: 11px; color: #a0a0a0'>Green: Positive | Red: Negative | Size: Degree | Color: Input Current</span>"
+                    "<span style='font-size: 11px; color: #a0a0a0'>Green: Positive | Red: Negative | Size: Degree | Color: Input Current</span>"
                 ),
                 font=dict(size=13),
-            )
+            ),
         ],
     )
     return fig

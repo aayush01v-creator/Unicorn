@@ -6,7 +6,9 @@ from backend.neuron_sim.framework_runner import run_simulation, select_simulator
 
 class FrameworkRunnerTests(unittest.TestCase):
     def test_auto_prefers_simple_when_frameworks_are_missing(self):
-        with patch("backend.neuron_sim.framework_runner._module_available", return_value=False):
+        with patch(
+            "backend.neuron_sim.framework_runner._module_available", return_value=False
+        ):
             self.assertEqual(select_simulator({"simulator": "auto"}), "simple")
 
     def test_invalid_simulator_raises(self):

@@ -33,11 +33,11 @@ From the repository root with your virtual environment activated:
 python main.py samples/network.json
 
 # 2. Compute 3D forces layout
-python layout_demo.py samples/network.json --output samples/layout_output.json
+python -m tools.layout_demo samples/network.json --output samples/layout_output.json
 
 # 3. Render previews to the output/ directory
-python render_preview.py samples/network.json --layout samples/layout_output.json --output output/network_preview.html
-python animate_preview.py samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
+python -m tools.render_preview samples/network.json --layout samples/layout_output.json --output output/network_preview.html
+python -m tools.animate_preview samples/network.json --layout samples/layout_output.json --spikes samples/spike_history.json --output output/spike_animation.html
 ```
 
 ## Viewing the Output
@@ -56,7 +56,7 @@ Open the generated files from your `output/` directory:
 Use the included helper script to rapidly trace out new structured probability models or custom topological parameters from the command line:
 
 ```bash
-python ./network_builder.py samples/network.json add-neuron 3 --input-current 0.4
-python ./network_builder.py samples/network.json add-synapse 2 3 0.8
-python ./network_builder.py samples/network.json summary
+python -m tools.network_builder samples/network.json add-neuron 3 --input-current 0.4
+python -m tools.network_builder samples/network.json add-synapse 2 3 0.8
+python -m tools.network_builder samples/network.json summary
 ```

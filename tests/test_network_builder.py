@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from animate_preview import compute_trail_intensities
+from tools.animate_preview import compute_trail_intensities
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 class NetworkBuilderCliTests(unittest.TestCase):
     def run_cli(self, *args):
         result = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "network_builder.py"), *args],
+            [sys.executable, "-m", "tools.network_builder", *args],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

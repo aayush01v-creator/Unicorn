@@ -728,8 +728,8 @@ def _build_vertex_buffers(network, layout):
 
 
 def build_webgpu_payload(network, layout, history):
-    neuron_ids, id_to_index, neuron_vertices, edge_vertices, camera_radius = _build_vertex_buffers(
-        network, layout
+    neuron_ids, id_to_index, neuron_vertices, edge_vertices, camera_radius = (
+        _build_vertex_buffers(network, layout)
     )
     spikes = []
     for step in history:
@@ -742,9 +742,8 @@ def build_webgpu_payload(network, layout, history):
                     frame[id_to_index[normalized_id]] = 1
         else:
             spike_list = list(spike_values)
-            is_dense_binary = (
-                len(spike_list) == len(neuron_ids)
-                and all(value in (0, 1, 0.0, 1.0, False, True) for value in spike_list)
+            is_dense_binary = len(spike_list) == len(neuron_ids) and all(
+                value in (0, 1, 0.0, 1.0, False, True) for value in spike_list
             )
             if is_dense_binary:
                 for idx, fired in enumerate(spike_list):
@@ -770,7 +769,11 @@ def build_webgpu_payload(network, layout, history):
             if neuron_id in layout_by_id
         ],
         "synapses": [
-            {"from": synapse["from"], "to": synapse["to"], "weight": synapse.get("weight", 0.0)}
+            {
+                "from": synapse["from"],
+                "to": synapse["to"],
+                "weight": synapse.get("weight", 0.0),
+            }
             for synapse in network.get("synapses", [])
         ],
     }
@@ -791,14 +794,18 @@ def build_webgpu_payload(network, layout, history):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate a WebGPU neural spike preview HTML.")
+    parser = argparse.ArgumentParser(
+        description="Generate a WebGPU neural spike preview HTML."
+    )
     parser.add_argument(
         "network",
         nargs="?",
         default="samples/network.json",
         help="Path to Unicorn JSON, SONATA-style JSON, or NeuroML file",
     )
-    parser.add_argument("--layout", default="samples/layout_output.json", help="Layout JSON path")
+    parser.add_argument(
+        "--layout", default="samples/layout_output.json", help="Layout JSON path"
+    )
     parser.add_argument(
         "--history",
         default=None,

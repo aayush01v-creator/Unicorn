@@ -13,7 +13,9 @@ class SimpleSNN:
         self.n = len(self.neurons)
         self.v = [float(n.get("initial_voltage", 0.0)) for n in self.neurons]
         self.thresholds = [float(n.get("threshold", 1.0)) for n in self.neurons]
-        self.reset_potentials = [float(n.get("reset_potential", 0.0)) for n in self.neurons]
+        self.reset_potentials = [
+            float(n.get("reset_potential", 0.0)) for n in self.neurons
+        ]
 
         default_tau = float(config.get("membrane_time_constant", 10.0))
         self.membrane_time_constants = [
@@ -29,7 +31,9 @@ class SimpleSNN:
         ]
         if any(period < 0 for period in self.refractory_periods):
             raise ValueError("refractory_period must be non-negative")
-        self.refractory_steps = [math.ceil(period / self.dt) for period in self.refractory_periods]
+        self.refractory_steps = [
+            math.ceil(period / self.dt) for period in self.refractory_periods
+        ]
         self.refractory_countdown = [0] * self.n
 
         configured_current = config.get("input_current", [0.0] * self.n)
@@ -58,7 +62,9 @@ class SimpleSNN:
             for pre_idx, pre_spike in enumerate(spikes):
                 if pre_spike:
                     for post_idx in range(self.n):
-                        synaptic_current[post_idx] += pre_spike * self.weights[pre_idx][post_idx]
+                        synaptic_current[post_idx] += (
+                            pre_spike * self.weights[pre_idx][post_idx]
+                        )
 
             active_mask = [countdown == 0 for countdown in self.refractory_countdown]
             for idx, is_active in enumerate(active_mask):
@@ -83,12 +89,18 @@ class SimpleSNN:
                     "time": round(t * self.dt, 10),
                     "voltages": list(self.v),
                     "spikes": [int(spike) for spike in spikes],
-                    "refractory_remaining": [countdown * self.dt for countdown in self.refractory_countdown],
+                    "refractory_remaining": [
+                        countdown * self.dt for countdown in self.refractory_countdown
+                    ],
                 }
             )
 
             self.refractory_countdown = [
-                max(0, countdown - 1) if not spikes[idx] and countdown > 0 else countdown
+                (
+                    max(0, countdown - 1)
+                    if not spikes[idx] and countdown > 0
+                    else countdown
+                )
                 for idx, countdown in enumerate(self.refractory_countdown)
             ]
 

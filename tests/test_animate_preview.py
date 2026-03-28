@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from animate_preview import parse_args
+from tools.animate_preview import parse_args
 
 
 class AnimatePreviewCliTests(unittest.TestCase):

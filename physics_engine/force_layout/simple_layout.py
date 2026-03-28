@@ -83,9 +83,6 @@ class ForceDirectedLayout:
             self.step()
 
         return [
-            {
-                "id": i,
-                "position": self.positions[i].round(4).tolist()
-            }
+            {"id": i, "position": self.positions[i].round(4).tolist()}
             for i in range(self.n)
         ]

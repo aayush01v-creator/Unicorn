@@ -60,12 +60,16 @@ def create_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Create a fresh network file.")
-    init_parser.add_argument("--force", action="store_true", help="Overwrite an existing file.")
+    init_parser.add_argument(
+        "--force", action="store_true", help="Overwrite an existing file."
+    )
     init_parser.add_argument("--steps", type=int, default=10)
     init_parser.add_argument("--dt", type=float, default=1.0)
     init_parser.add_argument("--refractory-period", type=float, default=0.0)
 
-    neuron_parser = subparsers.add_parser("add-neuron", help="Append a neuron definition.")
+    neuron_parser = subparsers.add_parser(
+        "add-neuron", help="Append a neuron definition."
+    )
     neuron_parser.add_argument("id", type=int)
     neuron_parser.add_argument("--threshold", type=float, default=1.0)
     neuron_parser.add_argument("--membrane-time-constant", type=float, default=10.0)
@@ -74,7 +78,9 @@ def create_parser() -> argparse.ArgumentParser:
     neuron_parser.add_argument("--initial-voltage", type=float, default=None)
     neuron_parser.add_argument("--input-current", type=float, default=0.0)
 
-    synapse_parser = subparsers.add_parser("add-synapse", help="Append a synapse definition.")
+    synapse_parser = subparsers.add_parser(
+        "add-synapse", help="Append a synapse definition."
+    )
     synapse_parser.add_argument("source", type=int)
     synapse_parser.add_argument("target", type=int)
     synapse_parser.add_argument("weight", type=float)
@@ -261,7 +267,10 @@ def main() -> None:
         "set-input": cmd_set_input,
         "set-config": cmd_set_config,
         "summary": cmd_summary,
-        "validate": lambda parsed_args: (validate_network(load_network(Path(parsed_args.path))) or f"Validated {parsed_args.path}"),
+        "validate": lambda parsed_args: (
+            validate_network(load_network(Path(parsed_args.path)))
+            or f"Validated {parsed_args.path}"
+        ),
     }
 
     message = commands[args.command](args)

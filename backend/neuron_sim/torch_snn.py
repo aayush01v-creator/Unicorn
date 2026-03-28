@@ -33,7 +33,9 @@ class TorchSNN:
         )
 
         default_tau = float(config.get("membrane_time_constant", 10.0))
-        taus = [float(n.get("membrane_time_constant", default_tau)) for n in self.neurons]
+        taus = [
+            float(n.get("membrane_time_constant", default_tau)) for n in self.neurons
+        ]
         if any(tau <= 0 for tau in taus):
             raise ValueError("membrane_time_constant must be greater than zero")
         self.decay = torch.tensor(
@@ -43,7 +45,9 @@ class TorchSNN:
         )
 
         default_refractory = float(config.get("refractory_period", 0.0))
-        refractory_periods = [float(n.get("refractory_period", default_refractory)) for n in self.neurons]
+        refractory_periods = [
+            float(n.get("refractory_period", default_refractory)) for n in self.neurons
+        ]
         if any(period < 0 for period in refractory_periods):
             raise ValueError("refractory_period must be non-negative")
         self.refractory_steps = torch.tensor(
@@ -51,7 +55,9 @@ class TorchSNN:
             dtype=torch.int32,
             device=self.device,
         )
-        self.refractory_countdown = torch.zeros(self.n, dtype=torch.int32, device=self.device)
+        self.refractory_countdown = torch.zeros(
+            self.n, dtype=torch.int32, device=self.device
+        )
 
         configured_current = config.get("input_current", [0.0] * self.n)
         input_current = [float(current) for current in configured_current]
@@ -59,9 +65,13 @@ class TorchSNN:
             input_current.extend([0.0] * (self.n - len(input_current)))
         elif len(input_current) > self.n:
             input_current = input_current[: self.n]
-        self.input_current = torch.tensor(input_current, dtype=torch.float32, device=self.device)
+        self.input_current = torch.tensor(
+            input_current, dtype=torch.float32, device=self.device
+        )
 
-        self.weights = torch.zeros((self.n, self.n), dtype=torch.float32, device=self.device)
+        self.weights = torch.zeros(
+            (self.n, self.n), dtype=torch.float32, device=self.device
+        )
         for synapse in self.synapses:
             pre = int(synapse["from"])
             post = int(synapse["to"])
@@ -79,7 +89,9 @@ class TorchSNN:
             synaptic_current = spikes @ self.weights
 
             active_mask = self.refractory_countdown == 0
-            integrated = self.v * self.decay + (self.input_current + synaptic_current) * self.dt
+            integrated = (
+                self.v * self.decay + (self.input_current + synaptic_current) * self.dt
+            )
             self.v = self.torch.where(active_mask, integrated, self.reset_potentials)
 
             spikes = self.torch.where(

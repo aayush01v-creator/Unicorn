@@ -32,9 +32,13 @@ def _parse_sonata_json(raw: NetworkDict) -> NetworkDict:
         raw_edges = raw_edges.get("edges", [])
 
     if not isinstance(raw_nodes, list) or not isinstance(raw_edges, list):
-        raise ValueError("SONATA config expects list-like 'nodes' and 'edges' sections.")
+        raise ValueError(
+            "SONATA config expects list-like 'nodes' and 'edges' sections."
+        )
 
-    sorted_nodes = sorted(raw_nodes, key=lambda node: int(node.get("node_id", node.get("id", 0))))
+    sorted_nodes = sorted(
+        raw_nodes, key=lambda node: int(node.get("node_id", node.get("id", 0)))
+    )
     id_map: dict[int, int] = {}
     neurons = []
     input_current = []
@@ -62,7 +66,9 @@ def _parse_sonata_json(raw: NetworkDict) -> NetworkDict:
         source = int(edge.get("source_node_id", edge.get("source")))
         target = int(edge.get("target_node_id", edge.get("target")))
         if source not in id_map or target not in id_map:
-            raise ValueError(f"SONATA edge references unknown node id: {source} -> {target}")
+            raise ValueError(
+                f"SONATA edge references unknown node id: {source} -> {target}"
+            )
         synapses.append(
             {
                 "from": id_map[source],
