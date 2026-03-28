@@ -53,72 +53,75 @@ HTML_TEMPLATE = """<!doctype html>
   const payload = __PAYLOAD__;
 
   // ── Matrix helpers ──────────────────────────────────────────────────
-  // WGSL mat4x4<f32> is column-major: element [col*4 + row].
-  // All matrices here are stored column-major to match WGSL expectations.
+  // Strategy: build matrices in standard row-major math convention,
+  // then transpose on upload so WGSL mat4x4<f32> (column-major) reads
+  // correctly.  matMul(a,b) computes a*b in row-major.
+  // MVP is assembled as  matMul(view, proj)  so the shader sees
+  //   clip_pos = MVP * pos  ≡  (view * proj) * pos
+  // which is equivalent to  proj * (view * pos)  in column-vector math.
 
-  // Multiply two column-major 4x4 matrices: result = a * b
+  // Multiply two row-major 4×4 matrices: result = a * b
   function matMul(a, b) {
-    const out = new Float32Array(16);
-    for (let col = 0; col < 4; col++) {
-      for (let row = 0; row < 4; row++) {
-        let sum = 0;
-        for (let k = 0; k < 4; k++) {
-          // a[k*4+row] = element at (row, k) in column-major
-          // b[col*4+k] = element at (k, col) in column-major
-          sum += a[k * 4 + row] * b[col * 4 + k];
-        }
-        out[col * 4 + row] = sum;
+    const o = new Float32Array(16);
+    for (let r = 0; r < 4; r++)
+      for (let c = 0; c < 4; c++) {
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[r*4+k] * b[k*4+c];
+        o[r*4+c] = s;
       }
-    }
-    return out;
+    return o;
   }
 
-  // Column-major perspective projection (reversed-Z, right-hand NDC).
-  // Produces the standard OpenGL/WebGPU perspective matrix stored column-major.
+  // Transpose a row-major 4×4 matrix into column-major for WGSL upload.
+  function transpose(m) {
+    return new Float32Array([
+      m[0],m[4],m[8], m[12],
+      m[1],m[5],m[9], m[13],
+      m[2],m[6],m[10],m[14],
+      m[3],m[7],m[11],m[15],
+    ]);
+  }
+
+  // Row-major perspective projection. Camera looks along -Z.
+  // near → -1, far → +1 in NDC (OpenGL convention; depth clamped by WebGPU).
   function perspective(fovy, aspect, near, far) {
     const f  = 1.0 / Math.tan(fovy / 2);
     const nf = 1.0 / (near - far);
-    // Columns 0..3, each stored as 4 consecutive floats
     return new Float32Array([
-      f / aspect, 0,  0,                    0,   // col 0
-      0,          f,  0,                    0,   // col 1
-      0,          0,  (far + near) * nf,   -1,   // col 2
-      0,          0,  2 * far * near * nf,  0,   // col 3
+      f/aspect, 0,  0,                     0,
+      0,        f,  0,                     0,
+      0,        0,  (far+near)*nf,          2*far*near*nf,
+      0,        0,  -1,                    0,
     ]);
   }
 
-  // Column-major lookAt view matrix (right-hand coordinate system).
+  // Row-major lookAt — camera looks from eye toward target.
+  // Produces a view matrix where the scene maps to NEGATIVE Z in eye space,
+  // so the perspective divide gives positive W and geometry passes clip.
   function lookAt(eye, target, up) {
-    // forward = normalize(eye - target)  →  +Z axis
-    let fx = eye[0]-target[0], fy = eye[1]-target[1], fz = eye[2]-target[2];
-    const fLen = Math.hypot(fx, fy, fz) || 1;
-    fx /= fLen; fy /= fLen; fz /= fLen;
+    // f = normalize(target - eye)  →  camera -Z direction
+    let fx = target[0]-eye[0], fy = target[1]-eye[1], fz = target[2]-eye[2];
+    const fLen = Math.hypot(fx,fy,fz)||1;
+    fx/=fLen; fy/=fLen; fz/=fLen;
 
-    // right = normalize(up × forward)  →  +X axis
-    let rx = up[1]*fz - up[2]*fy;
-    let ry = up[2]*fx - up[0]*fz;
-    let rz = up[0]*fy - up[1]*fx;
-    const rLen = Math.hypot(rx, ry, rz) || 1;
-    rx /= rLen; ry /= rLen; rz /= rLen;
+    // r = normalize(f × up)  →  +X (right)
+    let rx = fy*up[2]-fz*up[1], ry = fz*up[0]-fx*up[2], rz = fx*up[1]-fy*up[0];
+    const rLen = Math.hypot(rx,ry,rz)||1;
+    rx/=rLen; ry/=rLen; rz/=rLen;
 
-    // up' = forward × right  →  +Y axis (reorthogonalised)
-    const ux = fy*rz - fz*ry;
-    const uy = fz*rx - fx*rz;
-    const uz = fx*ry - fy*rx;
+    // u = r × f  →  reorthogonalised +Y (up)
+    const ux = ry*fz-rz*fy, uy = rz*fx-rx*fz, uz = rx*fy-ry*fx;
 
-    // Translation: -dot(basis, eye)
-    const tx = -(rx*eye[0] + ry*eye[1] + rz*eye[2]);
-    const ty = -(ux*eye[0] + uy*eye[1] + uz*eye[2]);
-    const tz = -(fx*eye[0] + fy*eye[1] + fz*eye[2]);
-
-    // Column-major storage
+    // Row-major view matrix
     return new Float32Array([
-      rx, ux, fx, 0,   // col 0  (X basis)
-      ry, uy, fy, 0,   // col 1  (Y basis)
-      rz, uz, fz, 0,   // col 2  (Z basis / forward)
-      tx, ty, tz, 1,   // col 3  (translation)
+       rx,  ry,  rz, -(rx*eye[0]+ry*eye[1]+rz*eye[2]),
+       ux,  uy,  uz, -(ux*eye[0]+uy*eye[1]+uz*eye[2]),
+      -fx, -fy, -fz,  (fx*eye[0]+fy*eye[1]+fz*eye[2]),
+       0,   0,   0,   1,
     ]);
   }
+
+
 
 
   function clamp(v, lo, hi) {
@@ -661,7 +664,7 @@ HTML_TEMPLATE = """<!doctype html>
       const eye = [Math.cos(yaw) * radius, radius * 0.6, Math.sin(yaw) * radius];
       const proj = perspective(Math.PI / 3, canvas.width / Math.max(1, canvas.height), 0.1, 1000);
       const view = lookAt(eye, [0,0,0], [0,1,0]);
-      const mvp = matMul(proj, view);
+      const mvp = transpose(matMul(view, proj));
       const drawData = new Float32Array(20);
       drawData.set(mvp, 0);
 
