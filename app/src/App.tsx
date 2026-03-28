@@ -210,7 +210,7 @@ export default function App() {
           <div className="logo">
             <img src={LOGO_URL} alt="Neurogen" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
           </div>
-          <h1>Neurogen</h1>
+          <h1>NeuroGen</h1>
           <span className="badge">SNN</span>
         </div>
         <div className="topbar-stats">
