@@ -7,6 +7,8 @@ import { WebGPUViewer } from './components/WebGPUViewer';
 import type { ViewerPayload } from './components/WebGPUViewer';
 import './index.css';
 
+const LOGO_URL = '/logo.png';
+
 // ── Icons (inline SVG for zero deps) ─────────────────────────
 const IconBrain = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -34,11 +36,7 @@ const IconRefresh = () => (
     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
   </svg>
 );
-const IconLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M4.22 4.22l2.12 2.12m11.32 11.32 2.12 2.12M2 12h3m14 0h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-  </svg>
-);
+
 
 // ── Configuration State ────────────────────────────────────────
 interface NetworkParams {
@@ -209,8 +207,10 @@ export default function App() {
       {/* ── Top Bar ── */}
       <header className="topbar">
         <div className="topbar-brand">
-          <div className="logo"><IconLogo /></div>
-          <h1>Unicorn</h1>
+          <div className="logo">
+            <img src={LOGO_URL} alt="Neurogen" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
+          </div>
+          <h1>Neurogen</h1>
           <span className="badge">SNN</span>
         </div>
         <div className="topbar-stats">
@@ -360,9 +360,9 @@ export default function App() {
           ) : !isSimulating ? (
             <div className="empty-state">
               <div className="empty-orb">
-                <IconLogo />
+                <img src={LOGO_URL} alt="Neurogen" style={{ width: 72, height: 72, borderRadius: '50%', opacity: 0.9, objectFit: 'cover' }} />
               </div>
-              <h2>Configure & Simulate</h2>
+              <h2>Configure &amp; Simulate</h2>
               <p>Use the control panel to shape your Spiking Neural Network, then hit Run to watch it fire in 3D.</p>
               <div className="empty-steps">
                 <div className="empty-step"><div className="empty-step-num">1</div>Set neuron count &amp; connectivity</div>
